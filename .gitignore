@@ -1,0 +1,21 @@
+# Node modules
+node_modules/
+
+# API keys and sensitive data
+.env
+
+# Credentials
+config.json
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Logs
+logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
