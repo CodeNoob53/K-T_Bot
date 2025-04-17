@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kahoot Bot</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Підключення бібліотек через CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.2.0/tf.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ml5.js/0.12.2/ml5.min.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Kahoot Bot</h1>
+        
+        <!-- Основна форма -->
+        <div class="input-group">
+            <label for="botName">Ім'я бота:</label>
+            <input type="text" id="botName" placeholder="Введіть ім'я бота" maxlength="15">
+        </div>
+        
+        <div class="input-group">
+            <label for="gamePin">PIN-код гри:</label>
+            <input type="number" id="gamePin" placeholder="Введіть PIN гри">
+        </div>
+        
+        <!-- Налаштування -->
+        <div class="settings-section">
+            <h2>Налаштування</h2>
+            
+            <div class="toggle-container">
+                <span>TensorFlow.js 
+                    <div class="tooltip">ℹ️
+                        <span class="tooltip-text">Використовує нейромережу для аналізу питань</span>
+                    </div>
+                </span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="useTensorflow" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <div class="toggle-container">
+                <span>ML5.js 
+                    <div class="tooltip">ℹ️
+                        <span class="tooltip-text">Використовує машинне навчання для класифікації питань</span>
+                    </div>
+                </span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="useML5" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <div class="toggle-container">
+                <span>Пошук в інтернеті 
+                    <div class="tooltip">ℹ️
+                        <span class="tooltip-text">Шукає відповіді в інтернеті</span>
+                    </div>
+                </span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="useSearch" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <!-- Кнопки керування -->
+        <button id="startBot" class="btn">Запустити бота</button>
+        <button id="stopBot" class="btn btn-stop" disabled>Зупинити бота</button>
+        
+        <!-- Статус та логи -->
+        <div class="status">
+            <div class="status-heading">
+                <span class="status-title">Статус бота:</span>
+                <span class="status-indicator" id="botStatus"></span>
+            </div>
+            <div id="logContainer"></div>
+        </div>
+        
+        <!-- Футер -->
+        <div class="footer">
+            Kahoot Bot &copy; 2025
+        </div>
+    </div>
+    
+    <!-- Підключення скриптів -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
