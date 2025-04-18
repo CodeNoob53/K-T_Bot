@@ -32,8 +32,6 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 20px;
-    backdrop-filter: var(--blur);
   }
   
   .container {
@@ -400,6 +398,13 @@
     background-color: var(--warning);
     box-shadow: 0 0 5px var(--warning);
   }
+
+  .proxy-format-note {
+    margin-top: -15px;
+    margin-bottom: 15px;
+    color: #666;
+    font-style: italic;
+}
   /* #endregion */
   
   /* #region Responsive */
