@@ -10,17 +10,32 @@ import * as utils from './utils.js';
 // Основні елементи інтерфейсу
 const botNameInput = document.getElementById('botName');
 const gamePinInput = document.getElementById('gamePin');
-const proxyUrlInput = document.getElementById('proxyUrl');
 const startBotBtn = document.getElementById('startBot');
 const stopBotBtn = document.getElementById('stopBot');
 const statusIndicator = document.getElementById('botStatus');
 const logContainer = document.getElementById('logContainer');
 
 // Елементи налаштувань
-const useProxyToggle = document.getElementById('useProxy');
 const useTensorflowToggle = document.getElementById('useTensorflow');
 const useML5Toggle = document.getElementById('useML5');
 const useSearchToggle = document.getElementById('useSearch');
+const useProxyToggle = document.getElementById('useProxy');
+
+// Елементи проксі
+const proxyUrlInput = document.getElementById('proxyUrl');
+const proxyLoginInput = document.getElementById('proxyLogin');
+const proxyPasswordInput = document.getElementById('proxyPassword');
+const testProxyBtn = document.getElementById('testProxy');
+
+// Елементи акордіону налаштувань
+const settingsHeader = document.getElementById('settingsHeader');
+const settingsToggle = document.getElementById('settingsToggle');
+const settingsContent = document.getElementById('settingsContent');
+
+// Елементи акордіону проксі
+const proxyHeader = document.getElementById('proxyHeader');
+const proxyToggle = document.getElementById('proxyToggle');
+const proxySettings = document.getElementById('proxySettings');
 
 // Змінні стану
 let botRunning = false;
@@ -58,27 +73,95 @@ function validateForm() {
 }
 
 // Перевірка проксі-сервера
-async function checkProxyServer(proxyUrl) {
+async function checkProxyConnection() {
+    if (!useProxyToggle.checked) return true;
+    
+    const proxyUrl = proxyUrlInput.value.trim();
+    const proxyLogin = proxyLoginInput.value.trim();
+    const proxyPassword = proxyPasswordInput.value.trim();
+    
+    if (!proxyUrl) {
+        logMessage('Помилка: URL проксі не вказано', 'error');
+        return false;
+    }
+    
     try {
-        logMessage('Перевірка доступності проксі-сервера...', 'info');
+        logMessage('Перевірка з\'єднання з проксі-сервером...', 'info');
         
-        const response = await fetch(`${proxyUrl.replace(/\/kahoot-api\/?$/, '')}`, {
-            method: 'GET',
-            mode: 'cors',
-            timeout: 5000
-        });
+        // Формуємо URL проксі з аутентифікацією
+        const formattedUrl = utils.formatProxyUrl(proxyUrl, proxyLogin, proxyPassword);
         
-        if (response.ok) {
+        const proxyStatus = await utils.checkProxyStatus(formattedUrl);
+        
+        if (proxyStatus) {
             logMessage('Проксі-сервер доступний', 'success');
             return true;
         } else {
-            logMessage(`Проксі-сервер недоступний. Статус: ${response.status}`, 'error');
+            logMessage('Проксі-сервер недоступний. Перевірте налаштування.', 'error');
             return false;
         }
     } catch (error) {
-        logMessage(`Помилка підключення до проксі-сервера: ${error.message}`, 'error');
+        logMessage(`Помилка перевірки проксі: ${error.message}`, 'error');
         return false;
     }
+}
+
+// Функція для перевірки проксі через інтерфейс користувача
+async function checkProxy() {
+    const proxyUrl = proxyUrlInput.value.trim();
+    const proxyLogin = proxyLoginInput.value.trim();
+    const proxyPassword = proxyPasswordInput.value.trim();
+    
+    if (!proxyUrl) {
+        updateProxyStatus('error', 'Помилка: URL проксі не може бути порожнім');
+        return;
+    }
+    
+    updateProxyStatus('warning', 'Перевірка підключення...');
+    
+    try {
+        // Форматуємо URL проксі з аутентифікацією
+        const formattedProxyUrl = utils.formatProxyUrl(proxyUrl, proxyLogin, proxyPassword);
+        
+        // Перевіряємо доступність проксі
+        const isAvailable = await utils.checkProxyStatus(formattedProxyUrl);
+        
+        if (isAvailable) {
+            updateProxyStatus('success', 'Проксі доступний і працює');
+        } else {
+            updateProxyStatus('error', 'Помилка: Проксі недоступний або не працює');
+        }
+    } catch (error) {
+        updateProxyStatus('error', `Помилка: ${error.message}`);
+    }
+}
+
+// Функція оновлення статусу проксі
+function updateProxyStatus(status, message) {
+    const statusIndicator = document.getElementById('proxyStatusIndicator');
+    const statusText = document.getElementById('proxyStatusText');
+    
+    // Очищаємо попередні класи
+    statusIndicator.classList.remove('success', 'warning', 'error');
+    
+    // Додаємо новий клас відповідно до статусу
+    statusIndicator.classList.add(status);
+    
+    // Оновлюємо текст статусу
+    statusText.textContent = message;
+}
+
+// Обробники подій для акордіонів
+function toggleSettingsAccordion() {
+    settingsToggle.classList.toggle('active');
+    settingsContent.classList.toggle('active');
+    settingsToggle.textContent = settingsToggle.classList.contains('active') ? '▲' : '▼';
+}
+
+function toggleProxyAccordion() {
+    proxyToggle.classList.toggle('active');
+    proxySettings.classList.toggle('active');
+    proxyToggle.textContent = proxyToggle.classList.contains('active') ? '▲' : '▼';
 }
 
 // Обробник події для кнопки запуску бота
@@ -94,14 +177,10 @@ startBotBtn.addEventListener('click', async function() {
         return;
     }
     
-    // Перевірка проксі-сервера, якщо увімкнено
+    // Перевірка проксі, якщо увімкнено
     if (useProxyToggle.checked) {
-        const proxyUrl = proxyUrlInput.value.trim();
-        const proxyAvailable = await checkProxyServer(proxyUrl);
-        
+        const proxyAvailable = await checkProxyConnection();
         if (!proxyAvailable) {
-            logMessage('Попередження: Проксі-сервер недоступний. Запуск проксі-сервера...', 'warn');
-            logMessage('Для запуску проксі виконайте в терміналі: node proxy-server.js', 'info');
             return;
         }
     }
@@ -112,24 +191,31 @@ startBotBtn.addEventListener('click', async function() {
     try {
         const botName = botNameInput.value.trim();
         const gamePin = gamePinInput.value.trim();
-        const proxyUrl = proxyUrlInput.value.trim();
         
-        // Налаштування бота
+        // Підготовка налаштувань бота
         const botOptions = {
             useTensorflow: useTensorflowToggle.checked,
             useML5: useML5Toggle.checked,
             useSearch: useSearchToggle.checked,
-            useProxy: useProxyToggle.checked,
-            proxyUrl: proxyUrl,
             delay: { min: 500, max: 2000 },
-            logCallback: logMessage
+            logCallback: logMessage,
+            proxy: {
+                enabled: useProxyToggle.checked,
+                url: proxyUrlInput.value.trim(),
+                auth: {
+                    username: proxyLoginInput.value.trim(),
+                    password: proxyPasswordInput.value.trim()
+                }
+            }
         };
         
-        // Ініціалізація аналізатора ML
+        // Ініціалізація аналізатора ML якщо увімкнено
         if (botOptions.useTensorflow || botOptions.useML5) {
             const mlAnalyzer = new MLAnalyzer({
                 useTensorflow: botOptions.useTensorflow,
                 useML5: botOptions.useML5,
+                modelPath: 'models/model.json',
+                wordIndexPath: 'models/word_index.json',
                 logCallback: logMessage
             });
             
@@ -137,12 +223,16 @@ startBotBtn.addEventListener('click', async function() {
             logMessage('ML аналізатор ініціалізовано', 'success');
         }
         
-        // Ініціалізація пошукового рушія
+        // Ініціалізація пошукового рушія якщо увімкнено
         if (botOptions.useSearch) {
             const searchEngine = new SearchEngine({
                 logCallback: logMessage,
-                useProxy: botOptions.useProxy,
-                proxyUrl: botOptions.proxyUrl
+                useProxy: botOptions.proxy.enabled,
+                proxyUrl: botOptions.proxy.enabled ? utils.formatProxyUrl(
+                    botOptions.proxy.url,
+                    botOptions.proxy.auth.username,
+                    botOptions.proxy.auth.password
+                ) : ''
             });
             
             botOptions.searchEngine = searchEngine;
@@ -170,8 +260,12 @@ startBotBtn.addEventListener('click', async function() {
                 useTensorflow: botOptions.useTensorflow,
                 useML5: botOptions.useML5,
                 useSearch: botOptions.useSearch,
-                useProxy: botOptions.useProxy,
-                proxyUrl: botOptions.proxyUrl
+                proxy: {
+                    enabled: botOptions.proxy.enabled,
+                    url: botOptions.proxy.url,
+                    username: botOptions.proxy.auth.username
+                    // Не зберігаємо пароль з міркувань безпеки
+                }
             });
         } else {
             startBotBtn.disabled = false;
@@ -214,6 +308,22 @@ window.addEventListener('beforeunload', function(event) {
     }
 });
 
+// Обробники подій для акордіонів
+settingsHeader.addEventListener('click', toggleSettingsAccordion);
+settingsToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSettingsAccordion();
+});
+
+proxyHeader.addEventListener('click', toggleProxyAccordion);
+proxyToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleProxyAccordion();
+});
+
+// Обробник події для кнопки перевірки проксі
+testProxyBtn.addEventListener('click', checkProxy);
+
 // Завантаження збережених налаштувань при завантаженні сторінки
 document.addEventListener('DOMContentLoaded', function() {
     const savedSettings = utils.loadFromStorage('kahootBot.settings');
@@ -235,14 +345,27 @@ document.addEventListener('DOMContentLoaded', function() {
             useSearchToggle.checked = savedSettings.useSearch;
         }
         
-        if (savedSettings.useProxy !== undefined) {
-            useProxyToggle.checked = savedSettings.useProxy;
-        }
-        
-        if (savedSettings.proxyUrl) {
-            proxyUrlInput.value = savedSettings.proxyUrl;
+        // Завантаження налаштувань проксі
+        if (savedSettings.proxy) {
+            if (savedSettings.proxy.enabled !== undefined) {
+                useProxyToggle.checked = savedSettings.proxy.enabled;
+            }
+            
+            if (savedSettings.proxy.url) {
+                proxyUrlInput.value = savedSettings.proxy.url;
+            }
+            
+            if (savedSettings.proxy.username) {
+                proxyLoginInput.value = savedSettings.proxy.username;
+            }
+            // Пароль не зберігається в localStorage з міркувань безпеки
         }
     }
+    
+    // Показуємо акордіон налаштувань за замовчуванням
+    settingsToggle.classList.add('active');
+    settingsContent.classList.add('active');
+    settingsToggle.textContent = '▲';
     
     // Початкове логування
     logMessage('Бот готовий до роботи. Введіть дані та натисніть "Запустити бота".', 'info');
@@ -258,6 +381,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!ml5Available && useML5Toggle.checked) {
             logMessage('Попередження: ML5.js не завантажений. Деякі функції можуть не працювати.', 'warn');
+        }
+        
+        // Автоматична перевірка проксі при завантаженні, якщо він увімкнений та вказаний URL
+        if (useProxyToggle.checked && proxyUrlInput.value.trim()) {
+            await checkProxy();
         }
     }, 1000);
 });
