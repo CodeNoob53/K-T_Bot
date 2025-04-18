@@ -1,11 +1,16 @@
 /**
  * Головний файл для керування Kahoot-ботом
+ * Адаптований для роботи з проксі-сервером на Render.com
  */
 
 import KahootBot from './KahootBot.js';
 import MLAnalyzer from './MLAnalyzer.js';
 import SearchEngine from './SearchEngine.js';
 import * as utils from './utils.js';
+
+// Адреса проксі-сервера на Render.com
+// !!! ВАЖЛИВО: Замініть цей URL на вашу реальну адресу додатку на Render.com
+const PROXY_SERVER_URL = 'https://your-app-name.onrender.com';
 
 // Основні елементи інтерфейсу
 const botNameInput = document.getElementById('botName');
@@ -60,76 +65,43 @@ function validateForm() {
         logMessage('Помилка: Введіть коректний PIN-код гри (6-10 цифр)', 'error');
         return false;
     }
-
-    if (useProxyToggle.checked) {
-        const proxyUrl = proxyUrlInput.value.trim();
-        if (!proxyUrl) {
-            logMessage('Помилка: Введіть URL проксі-сервера або вимкніть використання проксі', 'error');
-            return false;
-        }
-    }
     
     return true;
 }
 
-// Перевірка проксі-сервера
-async function checkProxyConnection() {
-    if (!useProxyToggle.checked) return true;
-    
-    const proxyUrl = proxyUrlInput.value.trim();
-    const proxyLogin = proxyLoginInput.value.trim();
-    const proxyPassword = proxyPasswordInput.value.trim();
-    
-    if (!proxyUrl) {
-        logMessage('Помилка: URL проксі не вказано', 'error');
-        return false;
-    }
-    
+// Перевірка доступності проксі-сервера на Render.com
+async function checkProxyServerConnection() {
     try {
-        logMessage('Перевірка з\'єднання з проксі-сервером...', 'info');
+        logMessage('Перевірка з\'єднання з проксі-сервером на Render.com...', 'info');
         
-        // Формуємо URL проксі з аутентифікацією
-        const formattedUrl = utils.formatProxyUrl(proxyUrl, proxyLogin, proxyPassword);
+        const response = await fetch(`${PROXY_SERVER_URL}/`);
         
-        const proxyStatus = await utils.checkProxyStatus(formattedUrl);
-        
-        if (proxyStatus) {
-            logMessage('Проксі-сервер доступний', 'success');
+        if (response.ok) {
+            const data = await response.json();
+            logMessage(`Проксі-сервер доступний: ${JSON.stringify(data)}`, 'success');
             return true;
         } else {
-            logMessage('Проксі-сервер недоступний. Перевірте налаштування.', 'error');
+            logMessage(`Помилка з'єднання з проксі-сервером: ${response.status} ${response.statusText}`, 'error');
             return false;
         }
     } catch (error) {
-        logMessage(`Помилка перевірки проксі: ${error.message}`, 'error');
+        logMessage(`Помилка перевірки проксі-сервера: ${error.message}`, 'error');
+        logMessage(`Переконайтеся, що проксі-сервер запущено на ${PROXY_SERVER_URL}`, 'warn');
         return false;
     }
 }
 
-// Функція для перевірки проксі через інтерфейс користувача
+// Перевірка проксі-сервера через інтерфейс користувача (для налаштувань проксі)
 async function checkProxy() {
-    const proxyUrl = proxyUrlInput.value.trim();
-    const proxyLogin = proxyLoginInput.value.trim();
-    const proxyPassword = proxyPasswordInput.value.trim();
-    
-    if (!proxyUrl) {
-        updateProxyStatus('error', 'Помилка: URL проксі не може бути порожнім');
-        return;
-    }
-    
-    updateProxyStatus('warning', 'Перевірка підключення...');
+    updateProxyStatus('warning', 'Перевірка доступності проксі-сервера...');
     
     try {
-        // Форматуємо URL проксі з аутентифікацією
-        const formattedProxyUrl = utils.formatProxyUrl(proxyUrl, proxyLogin, proxyPassword);
-        
-        // Перевіряємо доступність проксі
-        const isAvailable = await utils.checkProxyStatus(formattedProxyUrl);
+        const isAvailable = await checkProxyServerConnection();
         
         if (isAvailable) {
-            updateProxyStatus('success', 'Проксі доступний і працює');
+            updateProxyStatus('success', 'Проксі-сервер на Render.com доступний і працює');
         } else {
-            updateProxyStatus('error', 'Помилка: Проксі недоступний або не працює');
+            updateProxyStatus('error', 'Помилка: Проксі-сервер на Render.com недоступний');
         }
     } catch (error) {
         updateProxyStatus('error', `Помилка: ${error.message}`);
@@ -164,6 +136,25 @@ function toggleProxyAccordion() {
     proxyToggle.textContent = proxyToggle.classList.contains('active') ? '▲' : '▼';
 }
 
+// Заповнення полів для проксі
+function fillProxyFields() {
+    // Заповнюємо поля налаштувань проксі для Render.com (вже налаштовано на сервері)
+    proxyUrlInput.value = "Налаштовано на Render.com";
+    proxyLoginInput.value = "Налаштовано на Render.com";
+    proxyPasswordInput.value = "**********";
+    
+    // Блокуємо редагування, оскільки проксі вже налаштовано на сервері
+    proxyUrlInput.disabled = true;
+    proxyLoginInput.disabled = true;
+    proxyPasswordInput.disabled = true;
+    
+    // Оновлюємо опис
+    const proxyStatusText = document.getElementById('proxyStatusText');
+    if (proxyStatusText) {
+        proxyStatusText.textContent = "Проксі налаштовано на сервері";
+    }
+}
+
 // Обробник події для кнопки запуску бота
 startBotBtn.addEventListener('click', async function() {
     if (botRunning) return;
@@ -177,12 +168,10 @@ startBotBtn.addEventListener('click', async function() {
         return;
     }
     
-    // Перевірка проксі, якщо увімкнено
-    if (useProxyToggle.checked) {
-        const proxyAvailable = await checkProxyConnection();
-        if (!proxyAvailable) {
-            return;
-        }
+    // Перевірка доступності проксі-сервера на Render.com
+    const isProxyServerAvailable = await checkProxyServerConnection();
+    if (!isProxyServerAvailable) {
+        return;
     }
     
     logMessage('Ініціалізація бота...', 'info');
@@ -199,13 +188,9 @@ startBotBtn.addEventListener('click', async function() {
             useSearch: useSearchToggle.checked,
             delay: { min: 500, max: 2000 },
             logCallback: logMessage,
+            proxyServerUrl: PROXY_SERVER_URL, // Використовуємо проксі-сервер на Render.com
             proxy: {
-                enabled: useProxyToggle.checked,
-                url: proxyUrlInput.value.trim(),
-                auth: {
-                    username: proxyLoginInput.value.trim(),
-                    password: proxyPasswordInput.value.trim()
-                }
+                enabled: true // Проксі завжди включено, оскільки воно налаштовано на сервері
             }
         };
         
@@ -227,12 +212,8 @@ startBotBtn.addEventListener('click', async function() {
         if (botOptions.useSearch) {
             const searchEngine = new SearchEngine({
                 logCallback: logMessage,
-                useProxy: botOptions.proxy.enabled,
-                proxyUrl: botOptions.proxy.enabled ? utils.formatProxyUrl(
-                    botOptions.proxy.url,
-                    botOptions.proxy.auth.username,
-                    botOptions.proxy.auth.password
-                ) : ''
+                useProxy: true, // Завжди використовуємо проксі
+                proxyUrl: PROXY_SERVER_URL + '/kahoot-api'
             });
             
             botOptions.searchEngine = searchEngine;
@@ -259,13 +240,7 @@ startBotBtn.addEventListener('click', async function() {
                 name: botName,
                 useTensorflow: botOptions.useTensorflow,
                 useML5: botOptions.useML5,
-                useSearch: botOptions.useSearch,
-                proxy: {
-                    enabled: botOptions.proxy.enabled,
-                    url: botOptions.proxy.url,
-                    username: botOptions.proxy.auth.username
-                    // Не зберігаємо пароль з міркувань безпеки
-                }
+                useSearch: botOptions.useSearch
             });
         } else {
             startBotBtn.disabled = false;
@@ -344,23 +319,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (savedSettings.useSearch !== undefined) {
             useSearchToggle.checked = savedSettings.useSearch;
         }
-        
-        // Завантаження налаштувань проксі
-        if (savedSettings.proxy) {
-            if (savedSettings.proxy.enabled !== undefined) {
-                useProxyToggle.checked = savedSettings.proxy.enabled;
-            }
-            
-            if (savedSettings.proxy.url) {
-                proxyUrlInput.value = savedSettings.proxy.url;
-            }
-            
-            if (savedSettings.proxy.username) {
-                proxyLoginInput.value = savedSettings.proxy.username;
-            }
-            // Пароль не зберігається в localStorage з міркувань безпеки
-        }
     }
+    
+    // Заповнюємо поля для проксі
+    fillProxyFields();
     
     // Показуємо акордіон налаштувань за замовчуванням
     settingsToggle.classList.add('active');
@@ -369,6 +331,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Початкове логування
     logMessage('Бот готовий до роботи. Введіть дані та натисніть "Запустити бота".', 'info');
+    logMessage(`Проксі-сервер налаштовано на ${PROXY_SERVER_URL}`, 'info');
+    
+    // Вимикаємо перемикач проксі, оскільки воно завжди увімкнено на Render.com
+    if (useProxyToggle) {
+        useProxyToggle.checked = true;
+        useProxyToggle.disabled = true;
+    }
     
     // Перевірка наявності необхідних бібліотек
     setTimeout(async function() {
@@ -383,9 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
             logMessage('Попередження: ML5.js не завантажений. Деякі функції можуть не працювати.', 'warn');
         }
         
-        // Автоматична перевірка проксі при завантаженні, якщо він увімкнений та вказаний URL
-        if (useProxyToggle.checked && proxyUrlInput.value.trim()) {
-            await checkProxy();
-        }
+        // Автоматична перевірка проксі при завантаженні
+        await checkProxyServerConnection();
     }, 1000);
 });

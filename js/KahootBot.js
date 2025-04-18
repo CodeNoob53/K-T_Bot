@@ -1,12 +1,17 @@
-// Основний файл для роботи з Kahoot API
+// Адаптований для Render.com клас KahootBot
 class KahootBot {
   constructor (name, pin, options = {}) {
-    this.name = name
-    this.pin = pin
-    this.socket = null
-    this.clientId = ''
-    this.sessionToken = ''
-    this.challengeToken = ''
+    this.name = name;
+    this.pin = pin;
+    this.socket = null;
+    this.clientId = '';
+    this.sessionToken = '';
+    this.challengeToken = '';
+    
+    // Налаштування сервера проксі
+    // За замовчуванням використовуємо Render.com URL
+    this.proxyServerUrl = options.proxyServerUrl || 'https://your-render-app-name.onrender.com';
+    
     this.options = {
       useTensorflow: options.useTensorflow || false,
       useML5: options.useML5 || false,
@@ -20,242 +25,127 @@ class KahootBot {
           password: options.proxy?.auth?.password || ''
         }
       }
-    }
+    };
 
-    this.currentQuestion = null
-    this.currentQuestionIndex = 0
-    this.answers = {}
-    this.questionHistory = []
+    this.currentQuestion = null;
+    this.currentQuestionIndex = 0;
+    this.answers = {};
+    this.questionHistory = [];
 
     // Стан підключення
-    this.connected = false
-    this.logCallback = options.logCallback || console.log
+    this.connected = false;
+    this.logCallback = options.logCallback || console.log;
 
     // Прив'язка зовнішніх модулів, якщо вони надані
-    this.mlAnalyzer = options.mlAnalyzer || null
-    this.searchEngine = options.searchEngine || null
+    this.mlAnalyzer = options.mlAnalyzer || null;
+    this.searchEngine = options.searchEngine || null;
 
     // Ініціалізація ML компонентів, якщо увімкнено
     if (
       (this.options.useTensorflow || this.options.useML5) &&
       !this.mlAnalyzer
     ) {
-      this.initMLComponents()
+      this.initMLComponents();
     }
   }
 
   // Логування з часовою міткою
   log (message) {
-    this.logCallback(`[${new Date().toLocaleTimeString()}] ${message}`)
+    this.logCallback(`[${new Date().toLocaleTimeString()}] ${message}`);
   }
 
   // Ініціалізація ML компонентів
   async initMLComponents () {
     try {
-      this.log('Ініціалізація ML компонентів...')
+      this.log('Ініціалізація ML компонентів...');
 
       // Ініціалізація TensorFlow.js
       if (this.options.useTensorflow) {
-        await this.initTensorflow()
+        await this.initTensorflow();
       }
 
       // Ініціалізація ML5.js
       if (this.options.useML5) {
-        await this.initML5()
+        await this.initML5();
       }
 
-      this.log('ML компоненти ініціалізовано')
+      this.log('ML компоненти ініціалізовано');
     } catch (error) {
-      this.log(`Помилка ініціалізації ML компонентів: ${error.message}`)
+      this.log(`Помилка ініціалізації ML компонентів: ${error.message}`);
     }
   }
 
   // Ініціалізація TensorFlow.js
   async initTensorflow () {
     try {
-      this.log('Ініціалізація TensorFlow.js...')
+      this.log('Ініціалізація TensorFlow.js...');
 
       // Перевірка наявності TF
       if (typeof tf === 'undefined') {
         throw new Error(
           'TensorFlow.js не доступний. Переконайтеся, що бібліотека завантажена.'
-        )
+        );
       }
 
       // Завантаження моделі для NLP аналізу
-      this.tfModel = await tf.loadLayersModel('models/model.json')
+      this.tfModel = await tf.loadLayersModel('models/model.json');
 
       // Завантаження токенізатора або відображення слів
-      const response = await fetch('models/word_index.json')
+      const response = await fetch('models/word_index.json');
       if (!response.ok) {
-        throw new Error(`Помилка завантаження словника: ${response.status}`)
+        throw new Error(`Помилка завантаження словника: ${response.status}`);
       }
 
-      this.wordIndex = await response.json()
+      this.wordIndex = await response.json();
 
-      this.log('TensorFlow.js модель успішно завантажена')
+      this.log('TensorFlow.js модель успішно завантажена');
     } catch (error) {
-      this.log(`Помилка ініціалізації TensorFlow: ${error.message}`)
+      this.log(`Помилка ініціалізації TensorFlow: ${error.message}`);
     }
   }
 
   // Ініціалізація ML5.js
   async initML5 () {
     try {
-      this.log('Ініціалізація ML5.js...')
+      this.log('Ініціалізація ML5.js...');
 
       // Перевірка наявності ML5
       if (typeof ml5 === 'undefined') {
         throw new Error(
           'ML5.js не доступний. Переконайтеся, що бібліотека завантажена.'
-        )
+        );
       }
 
       // Ініціалізація класифікатора тексту
       this.textClassifier = await ml5.neuralNetwork({
         task: 'classification',
         debug: false
-      })
+      });
 
-      this.log('ML5.js компоненти успішно ініціалізовані')
+      this.log('ML5.js компоненти успішно ініціалізовані');
     } catch (error) {
-      this.log(`Помилка ініціалізації ML5: ${error.message}`)
+      this.log(`Помилка ініціалізації ML5: ${error.message}`);
     }
   }
 
-  // Форматування URL проксі
-  formatProxyUrl () {
-    let proxyUrl = this.options.proxy.url
-
-    // Перевірка наявності URL
-    if (!proxyUrl) {
-      return ''
-    }
-
-    // Додавання протоколу, якщо потрібно
-    if (!proxyUrl.startsWith('http://') && !proxyUrl.startsWith('https://')) {
-      proxyUrl = 'http://' + proxyUrl
-    }
-
-    // Додавання автентифікації, якщо є логін і пароль
-    if (this.options.proxy.auth.username && this.options.proxy.auth.password) {
-      try {
-        const urlObj = new URL(proxyUrl)
-        urlObj.username = encodeURIComponent(this.options.proxy.auth.username)
-        urlObj.password = encodeURIComponent(this.options.proxy.auth.password)
-        proxyUrl = urlObj.toString()
-      } catch (error) {
-        this.log(`Помилка форматування URL проксі: ${error.message}`)
-      }
-    }
-
-    return proxyUrl
-  }
-
-  // Підключення до сервера Kahoot
+  // Підключення до сервера Kahoot через проксі-сервер на Render.com
   async connect() {
     try {
         this.log(`Підключення до гри Kahoot з PIN: ${this.pin}...`);
         
-        // Формування URL для відправки запиту
-        const kahootSessionUrl = `https://kahoot.it/reserve/session/${this.pin}`;
+        // Формування URL для відправки запиту через проксі на Render
+        const proxyKahootSessionUrl = `${this.proxyServerUrl}/kahoot-api/reserve/session/${this.pin}`;
         
-        // Перевірка проксі
-        if (!this.options.proxy.enabled || !this.options.proxy.url) {
-            throw new Error('Для підключення до Kahoot необхідно використовувати проксі-сервер для обходу CORS');
+        this.log(`Отримання сесійного токену через проксі-сервер: ${proxyKahootSessionUrl}`);
+        
+        // Отримання сесійного токену через проксі-сервер
+        const response = await fetch(proxyKahootSessionUrl);
+        
+        if (!response.ok) {
+            throw new Error(`Помилка відповіді від проксі-сервера: ${response.status} ${response.statusText}`);
         }
         
-        // Розбір формату проксі
-        let proxyInfo = this.options.proxy.url;
-        let proxyUsername = this.options.proxy.auth.username;
-        let proxyPassword = this.options.proxy.auth.password;
-        
-        // Перевірка, чи це формат з 4-х частин
-        const parts = proxyInfo.split(':');
-        if (parts.length === 4) {
-            proxyInfo = `${parts[0]}:${parts[1]}`;
-            proxyUsername = parts[2];
-            proxyPassword = parts[3];
-            this.log(`Використання спеціального формату проксі: ${parts[0]}:${parts[1]} з обліковими даними`);
-        }
-        
-        // Формування URL з обліковими даними
-        const proxyWithAuth = `http://${proxyUsername}:${proxyPassword}@${proxyInfo}`;
-        this.log(`Підключення через проксі: ${proxyInfo}`);
-        
-        // Формування запиту через зовнішній проксі
-        // Тут нам потрібно використовувати метод, який працює з SOCKS або HTTP проксі
-        // Оскільки Fetch API не підтримує проксі напряму, ми використовуємо XMLHttpRequest
-        
-        // Отримання сесійного токену
-        this.log(`Отримання сесійного токену з: ${kahootSessionUrl}`);
-        
-        const sessionData = await new Promise((resolve, reject) => {
-            // Перший варіант - використання системного проксі
-            try {
-                // Спроба використання системного проксі напряму (не працює в браузері)
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', kahootSessionUrl, true);
-                
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            try {
-                                const data = JSON.parse(xhr.responseText);
-                                resolve(data);
-                            } catch (e) {
-                                reject(new Error('Помилка парсингу відповіді'));
-                            }
-                        } else {
-                            reject(new Error(`Помилка запиту: ${xhr.status}`));
-                        }
-                    }
-                };
-                
-                xhr.onerror = function() {
-                    reject(new Error('Помилка мережі'));
-                };
-                
-                xhr.send();
-            } catch (browserError) {
-                // Другий варіант - якщо прямий доступ не працює
-                try {
-                    // Використовуємо cors-proxy сервіс для обходу CORS
-                    const corsProxyUrl = `https://cors-anywhere.herokuapp.com/${kahootSessionUrl}`;
-                    
-                    fetch(corsProxyUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Origin': window.location.origin
-                        }
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`Помилка запиту: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => resolve(data))
-                    .catch(err => reject(err));
-                } catch (corsError) {
-                    // Третій варіант - спробуємо через сервіс allorigins
-                    const publicProxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(kahootSessionUrl)}`;
-                    
-                    fetch(publicProxyUrl)
-                    .then(response => response.json())
-                    .then(data => {
-                        try {
-                            const parsedData = JSON.parse(data.contents);
-                            resolve(parsedData);
-                        } catch (e) {
-                            reject(new Error('Помилка парсингу відповіді від публічного проксі'));
-                        }
-                    })
-                    .catch(err => reject(err));
-                }
-            }
-        });
+        const sessionData = await response.json();
         
         // Перевірка отриманих даних
         if (!sessionData || !sessionData.token) {
@@ -268,9 +158,13 @@ class KahootBot {
         
         this.log(`Отримано токен сесії: ${this.sessionToken.substring(0, 10)}...`);
         
-        // Створення WebSocket з'єднання
-        const wsUrl = `wss://kahoot.it/cometd/${this.pin}/${this.sessionToken}`;
-        this.log(`Підключення WebSocket: ${wsUrl}`);
+        // Створення WebSocket з'єднання через проксі-сервер на Render
+        // Примітка: WebSocket URL потрібно змінити з http:// на ws:// або з https:// на wss://
+        const wsProtocol = this.proxyServerUrl.startsWith('https://') ? 'wss://' : 'ws://';
+        const hostPart = this.proxyServerUrl.replace('https://', '').replace('http://', '');
+        const wsUrl = `${wsProtocol}${hostPart}/kahoot-ws/cometd/${this.pin}/${this.sessionToken}`;
+        
+        this.log(`Підключення WebSocket через проксі: ${wsUrl}`);
         
         this.socket = new WebSocket(wsUrl);
         
@@ -303,47 +197,17 @@ class KahootBot {
         this.log(`Помилка підключення: ${error.message}`);
         return false;
     }
-}
-
-  // Новий метод для розбору URL проксі
-  parseProxyUrl () {
-    const proxyUrl = this.options.proxy.url
-    const username = this.options.proxy.auth.username
-    const password = this.options.proxy.auth.password
-
-    // Якщо URL не вказано
-    if (!proxyUrl) {
-      return { url: '', username: '', password: '' }
-    }
-
-    // Додаємо протокол, якщо відсутній
-    let fullUrl = proxyUrl
-    if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
-      fullUrl = 'http://' + fullUrl
-    }
-
-    try {
-      // Повертаємо об'єкт з URL без облікових даних, та окремими полями для імені та паролю
-      return {
-        url: fullUrl,
-        username: username || '',
-        password: password || ''
-      }
-    } catch (error) {
-      this.log(`Помилка розбору URL проксі: ${error.message}`)
-      return { url: fullUrl, username: '', password: '' }
-    }
   }
 
   // Обробник відкриття WebSocket з'єднання
   handleSocketOpen () {
-    this.log("WebSocket з'єднання встановлено")
-    this.sendClientInfo()
+    this.log("WebSocket з'єднання встановлено");
+    this.sendClientInfo();
   }
 
   // Відправка інформації про клієнта
   sendClientInfo () {
-    this.log(`Відправка інформації про клієнта...`)
+    this.log(`Відправка інформації про клієнта...`);
 
     // Формування повідомлення для handshake
     const handshakeMessage = {
@@ -356,14 +220,14 @@ class KahootBot {
         timeout: 60000,
         interval: 0
       }
-    }
+    };
 
-    this.socket.send(JSON.stringify([handshakeMessage]))
+    this.socket.send(JSON.stringify([handshakeMessage]));
   }
 
   // Відправка реєстраційної інформації
   registerUser () {
-    this.log(`Реєстрація з ім'ям: ${this.name}...`)
+    this.log(`Реєстрація з ім'ям: ${this.name}...`);
 
     // Формування повідомлення для реєстрації користувача
     const registerMessage = {
@@ -373,44 +237,44 @@ class KahootBot {
         type: 'login',
         name: this.name
       }
-    }
+    };
 
-    this.socket.send(JSON.stringify([registerMessage]))
+    this.socket.send(JSON.stringify([registerMessage]));
   }
 
   // Обробник повідомлень WebSocket
   async handleSocketMessage (event) {
     try {
-      const messages = JSON.parse(event.data)
+      const messages = JSON.parse(event.data);
 
       for (const message of messages) {
-        await this.processMessage(message)
+        await this.processMessage(message);
       }
     } catch (error) {
-      this.log(`Помилка обробки повідомлення: ${error.message}`)
+      this.log(`Помилка обробки повідомлення: ${error.message}`);
     }
   }
 
   // Обробка отриманих повідомлень
   async processMessage (message) {
-    const { channel, data, clientId, successful } = message
+    const { channel, data, clientId, successful } = message;
 
     // Обробка handshake відповіді
     if (channel === '/meta/handshake' && successful) {
-      this.clientId = clientId
-      this.log('Handshake успішний. Підключення до гри...')
-      this.subscribeToChannels()
+      this.clientId = clientId;
+      this.log('Handshake успішний. Підключення до гри...');
+      this.subscribeToChannels();
     }
 
     // Обробка успішної підписки
     if (channel === '/meta/subscribe' && successful) {
-      this.log('Підписка на канали успішна')
-      this.registerUser()
+      this.log('Підписка на канали успішна');
+      this.registerUser();
     }
 
     // Обробка повідомлень від гри
     if (channel === '/service/player') {
-      await this.handleGameMessage(data)
+      await this.handleGameMessage(data);
     }
   }
 
@@ -420,7 +284,7 @@ class KahootBot {
       '/service/player',
       '/service/status',
       '/service/controller'
-    ]
+    ];
 
     for (const channel of subscriptions) {
       const subscribeMessage = {
@@ -428,117 +292,117 @@ class KahootBot {
         channel: '/meta/subscribe',
         subscription: channel,
         clientId: this.clientId
-      }
+      };
 
-      this.socket.send(JSON.stringify([subscribeMessage]))
+      this.socket.send(JSON.stringify([subscribeMessage]));
     }
   }
 
   // Обробка ігрових повідомлень
   async handleGameMessage (data) {
     // Якщо повідомлення не має типу, ігноруємо його
-    if (!data || !data.type) return
+    if (!data || !data.type) return;
 
     switch (data.type) {
       case 'quiz':
-        this.log('Отримано інформацію про квіз')
-        break
+        this.log('Отримано інформацію про квіз');
+        break;
 
       case 'question':
-        this.currentQuestionIndex++
-        this.currentQuestion = data.question
+        this.currentQuestionIndex++;
+        this.currentQuestion = data.question;
         this.log(
           `Отримано питання #${this.currentQuestionIndex}: "${data.question}"`
-        )
+        );
         this.questionHistory.push({
           index: this.currentQuestionIndex,
           question: data.question,
           options: data.options
-        })
+        });
 
         // Аналіз питання і пошук відповіді
-        await this.findAnswer(data.question, data.options)
-        break
+        await this.findAnswer(data.question, data.options);
+        break;
 
       case 'questionEnd':
-        this.log(`Завершено питання #${this.currentQuestionIndex}`)
+        this.log(`Завершено питання #${this.currentQuestionIndex}`);
         // Тут можна аналізувати результати відповіді
-        break
+        break;
 
       case 'quizEnd':
-        this.log('Квіз завершено')
-        break
+        this.log('Квіз завершено');
+        break;
 
       default:
         // Інші типи повідомлень
-        break
+        break;
     }
   }
 
   // Аналіз питання та пошук відповіді
   async findAnswer (question, options) {
-    this.log('Аналіз питання та пошук відповіді...')
+    this.log('Аналіз питання та пошук відповіді...');
 
-    let bestAnswerIndex = -1
-    let confidence = 0
+    let bestAnswerIndex = -1;
+    let confidence = 0;
 
     try {
       // Використання зовнішнього ML аналізатора, якщо він є
       if (this.mlAnalyzer) {
-        this.log('Використання зовнішнього ML аналізатора...')
+        this.log('Використання зовнішнього ML аналізатора...');
 
         const mlResult = await this.mlAnalyzer.analyzeQuestion(
           question,
           options
-        )
+        );
 
         if (mlResult.index !== -1 && mlResult.confidence > confidence) {
-          bestAnswerIndex = mlResult.index
-          confidence = mlResult.confidence
+          bestAnswerIndex = mlResult.index;
+          confidence = mlResult.confidence;
           this.log(
             `ML аналізатор вибрав відповідь ${
               bestAnswerIndex + 1
             } з впевненістю ${confidence.toFixed(2)}`
-          )
+          );
         }
       }
       // Інакше використовуємо вбудовані методи
       else {
         // Використання TensorFlow.js для аналізу
         if (this.options.useTensorflow && this.tfModel) {
-          this.log('Використання TensorFlow.js для аналізу питання...')
+          this.log('Використання TensorFlow.js для аналізу питання...');
 
           // Токенізація питання
-          const sequence = this.tokenizeText(question)
-          const paddedSequence = this.padSequence(sequence, 50)
+          const sequence = this.tokenizeText(question);
+          const paddedSequence = this.padSequence(sequence, 50);
 
           // Перетворення в тензор і нормалізація
-          const tensor = tf.tensor2d([paddedSequence])
+          const tensor = tf.tensor2d([paddedSequence]);
 
           // Отримання прогнозів з моделі
-          const predictions = this.tfModel.predict(tensor)
-          const tfResults = await predictions.data()
+          const predictions = this.tfModel.predict(tensor);
+          const tfResults = await predictions.data();
 
           // Знаходження найбільш імовірної відповіді
-          const maxIndex = tfResults.indexOf(Math.max(...tfResults))
-          confidence = Math.max(...tfResults)
+          const maxIndex = tfResults.indexOf(Math.max(...tfResults));
+          confidence = Math.max(...tfResults);
 
           if (confidence > 0.6) {
-            bestAnswerIndex = maxIndex % options.length
+            bestAnswerIndex = maxIndex % options.length;
             this.log(
               `TensorFlow.js вибрав відповідь ${
                 bestAnswerIndex + 1
               } з впевненістю ${confidence.toFixed(2)}`
-            )
+            );
           } else {
             this.log(
               `TensorFlow.js не зміг визначити відповідь з достатньою впевненістю`
-            )
+            );
           }
 
           // Очищення ресурсів
-          tensor.dispose()
-          predictions.dispose()
+          tensor.dispose();
+          predictions.dispose();
         }
 
         // Використання ML5.js для аналізу, якщо TensorFlow не дав результату
@@ -547,70 +411,70 @@ class KahootBot {
           this.textClassifier &&
           bestAnswerIndex === -1
         ) {
-          this.log('Використання ML5.js для аналізу питання...')
+          this.log('Використання ML5.js для аналізу питання...');
 
           // Аналіз питання за допомогою ML5
-          const ml5Results = await this.analyzeWithML5(question, options)
+          const ml5Results = await this.analyzeWithML5(question, options);
 
           if (ml5Results.confidence > confidence) {
-            bestAnswerIndex = ml5Results.index
-            confidence = ml5Results.confidence
+            bestAnswerIndex = ml5Results.index;
+            confidence = ml5Results.confidence;
             this.log(
               `ML5.js вибрав відповідь ${
                 bestAnswerIndex + 1
               } з впевненістю ${confidence.toFixed(2)}`
-            )
+            );
           }
         }
       }
 
       // Використання зовнішнього пошукового рушія, якщо є
       if (this.searchEngine && bestAnswerIndex === -1) {
-        this.log('Використання зовнішнього пошукового рушія...')
+        this.log('Використання зовнішнього пошукового рушія...');
 
         const searchResults = await this.searchEngine.findBestAnswer(
           question,
           options
-        )
+        );
 
         if (
           searchResults.index !== -1 &&
           searchResults.confidence > confidence
         ) {
-          bestAnswerIndex = searchResults.index
-          confidence = searchResults.confidence
+          bestAnswerIndex = searchResults.index;
+          confidence = searchResults.confidence;
           this.log(
             `Пошук знайшов відповідь ${
               bestAnswerIndex + 1
             } з впевненістю ${confidence.toFixed(2)}`
-          )
+          );
         }
       }
       // Інакше використовуємо вбудований пошук, якщо увімкнено
       else if (this.options.useSearch && bestAnswerIndex === -1) {
-        this.log('Пошук відповіді в інтернеті...')
+        this.log('Пошук відповіді в інтернеті...');
 
-        const searchResults = await this.searchOnline(question, options)
+        const searchResults = await this.searchOnline(question, options);
 
         if (searchResults.confidence > confidence) {
-          bestAnswerIndex = searchResults.index
-          confidence = searchResults.confidence
+          bestAnswerIndex = searchResults.index;
+          confidence = searchResults.confidence;
           this.log(
             `Пошук в інтернеті знайшов відповідь ${
               bestAnswerIndex + 1
             } з впевненістю ${confidence.toFixed(2)}`
-          )
+          );
         }
       }
 
       // Якщо жоден метод не зміг знайти відповідь, вибираємо випадкову
       if (bestAnswerIndex === -1) {
-        bestAnswerIndex = Math.floor(Math.random() * options.length)
+        bestAnswerIndex = Math.floor(Math.random() * options.length);
         this.log(
           `Не вдалося знайти відповідь. Вибираємо випадкову відповідь: ${
             bestAnswerIndex + 1
           }`
-        )
+        );
       }
 
       // Запам'ятовуємо відповідь
@@ -618,31 +482,31 @@ class KahootBot {
         questionText: question,
         selectedIndex: bestAnswerIndex,
         confidence: confidence
-      }
+      };
 
       // Відправляємо відповідь з невеликою затримкою для імітації людської поведінки
       const randomDelay = Math.floor(
         Math.random() * (this.options.delay.max - this.options.delay.min) +
           this.options.delay.min
-      )
+      );
 
-      this.log(`Відправлення відповіді через ${randomDelay}мс...`)
+      this.log(`Відправлення відповіді через ${randomDelay}мс...`);
       setTimeout(() => {
-        this.sendAnswer(bestAnswerIndex)
-      }, randomDelay)
+        this.sendAnswer(bestAnswerIndex);
+      }, randomDelay);
     } catch (error) {
-      this.log(`Помилка при аналізі питання: ${error.message}`)
+      this.log(`Помилка при аналізі питання: ${error.message}`);
       // У разі помилки відправляємо випадкову відповідь
-      bestAnswerIndex = Math.floor(Math.random() * options.length)
-      this.sendAnswer(bestAnswerIndex)
+      bestAnswerIndex = Math.floor(Math.random() * options.length);
+      this.sendAnswer(bestAnswerIndex);
     }
   }
 
   // Відправка відповіді на сервер Kahoot
   sendAnswer (answerIndex) {
     if (!this.connected || !this.socket) {
-      this.log("Неможливо відправити відповідь: відсутнє з'єднання")
-      return false
+      this.log("Неможливо відправити відповідь: відсутнє з'єднання");
+      return false;
     }
 
     const answerMessage = {
@@ -657,56 +521,56 @@ class KahootBot {
         }
       },
       clientId: this.clientId
-    }
+    };
 
     try {
-      this.socket.send(JSON.stringify([answerMessage]))
-      this.log(`Відповідь ${answerIndex + 1} успішно відправлена!`)
-      return true
+      this.socket.send(JSON.stringify([answerMessage]));
+      this.log(`Відповідь ${answerIndex + 1} успішно відправлена!`);
+      return true;
     } catch (error) {
-      this.log(`Помилка відправлення відповіді: ${error.message}`)
-      return false
+      this.log(`Помилка відправлення відповіді: ${error.message}`);
+      return false;
     }
   }
 
   // Токенізація тексту для TensorFlow
   tokenizeText (text) {
-    if (!this.wordIndex || !this.wordIndex.words) return []
+    if (!this.wordIndex || !this.wordIndex.words) return [];
 
     // Нормалізація тексту
-    const normalized = text.toLowerCase().replace(/[^\w\s]/g, '')
-    const words = normalized.split(/\s+/)
+    const normalized = text.toLowerCase().replace(/[^\w\s]/g, '');
+    const words = normalized.split(/\s+/);
 
     // Перетворення слів у числові токени
     return words.map(word => {
-      return this.wordIndex.words[word] || 0 // 0 для невідомих слів
-    })
+      return this.wordIndex.words[word] || 0; // 0 для невідомих слів
+    });
   }
 
   // Доповнення послідовності до фіксованої довжини
   padSequence (sequence, maxLen) {
     if (sequence.length > maxLen) {
-      return sequence.slice(0, maxLen)
+      return sequence.slice(0, maxLen);
     }
 
     // Доповнення нулями
-    return [...sequence, ...Array(maxLen - sequence.length).fill(0)]
+    return [...sequence, ...Array(maxLen - sequence.length).fill(0)];
   }
 
   // Аналіз питання за допомогою ML5.js
   async analyzeWithML5 (question, options) {
     try {
       // Симуляція результатів аналізу, оскільки в реальності тут був би код для роботи з ML5
-      const confidences = options.map(() => Math.random())
-      const maxIndex = confidences.indexOf(Math.max(...confidences))
+      const confidences = options.map(() => Math.random());
+      const maxIndex = confidences.indexOf(Math.max(...confidences));
 
       return {
         index: maxIndex,
         confidence: Math.max(...confidences)
-      }
+      };
     } catch (error) {
-      this.log(`Помилка аналізу ML5: ${error.message}`)
-      return { index: -1, confidence: 0 }
+      this.log(`Помилка аналізу ML5: ${error.message}`);
+      return { index: -1, confidence: 0 };
     }
   }
 
@@ -714,52 +578,52 @@ class KahootBot {
   async searchOnline (question, options) {
     try {
       // Формування запиту для пошуку
-      const searchQuery = encodeURIComponent(question)
+      const searchQuery = encodeURIComponent(question);
 
-      this.log(`Пошук: "${question}"`)
+      this.log(`Пошук: "${question}"`);
 
       // У реальному проекті тут мав би бути запит до пошукової системи
       // Для демонстрації використовуємо симуляцію відповіді
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       // Аналіз результатів пошуку та порівняння з варіантами відповідей
       const optionScores = options.map((option, index) => {
         // Імітація оцінки релевантності кожного варіанту
-        const score = Math.random()
-        return { index, score }
-      })
+        const score = Math.random();
+        return { index, score };
+      });
 
       // Вибір найбільш релевантного варіанту
-      optionScores.sort((a, b) => b.score - a.score)
-      const bestOption = optionScores[0]
+      optionScores.sort((a, b) => b.score - a.score);
+      const bestOption = optionScores[0];
 
       return {
         index: bestOption.index,
         confidence: bestOption.score
-      }
+      };
     } catch (error) {
-      this.log(`Помилка пошуку в інтернеті: ${error.message}`)
-      return { index: -1, confidence: 0 }
+      this.log(`Помилка пошуку в інтернеті: ${error.message}`);
+      return { index: -1, confidence: 0 };
     }
   }
 
   // Обробник помилок WebSocket
   handleSocketError (error) {
-    this.log(`WebSocket помилка: ${error.message || 'Невідома помилка'}`)
-    this.connected = false
+    this.log(`WebSocket помилка: ${error.message || 'Невідома помилка'}`);
+    this.connected = false;
   }
 
   // Обробник закриття WebSocket
   handleSocketClose (event) {
-    this.log(`WebSocket з'єднання закрито: ${event.code} ${event.reason}`)
-    this.connected = false
+    this.log(`WebSocket з'єднання закрито: ${event.code} ${event.reason}`);
+    this.connected = false;
   }
 
   // Відключення від гри
   disconnect () {
     if (!this.connected || !this.socket) {
-      this.log('Бот вже відключений')
-      return true
+      this.log('Бот вже відключений');
+      return true;
     }
 
     try {
@@ -771,32 +635,29 @@ class KahootBot {
           type: 'leave'
         },
         clientId: this.clientId
-      }
+      };
 
-      this.socket.send(JSON.stringify([leaveMessage]))
+      this.socket.send(JSON.stringify([leaveMessage]));
 
       // Закриття WebSocket
-      this.socket.close()
-      this.socket = null
-      this.connected = false
+      this.socket.close();
+      this.socket = null;
+      this.connected = false;
 
       // Звільнення ресурсів TensorFlow.js, якщо є
       if (this.tfModel) {
         try {
-          this.tfModel.dispose()
+          this.tfModel.dispose();
         } catch (tfError) {
-          this.log(`Помилка звільнення ресурсів TensorFlow: ${tfError.message}`)
+          this.log(`Помилка звільнення ресурсів TensorFlow: ${tfError.message}`);
         }
       }
 
-      this.log('Бот успішно відключений від гри')
-      return true
+      this.log('Бот успішно відключений від гри');
+      return true;
     } catch (error) {
-      this.log(`Помилка відключення: ${error.message}`)
-      return false
+      this.log(`Помилка відключення: ${error.message}`);
+      return false;
     }
   }
 }
-
-// Експортуємо клас для використання в основному додатку
-export default KahootBot
