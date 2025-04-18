@@ -23,10 +23,27 @@
             <label for="gamePin">PIN-код гри:</label>
             <input type="number" id="gamePin" placeholder="Введіть PIN гри">
         </div>
+
+        <div class="input-group">
+            <label for="proxyUrl">URL проксі-сервера:</label>
+            <input type="text" id="proxyUrl" placeholder="http://localhost:3000/kahoot-api" value="http://localhost:3000/kahoot-api">
+        </div>
         
         <!-- Налаштування -->
         <div class="settings-section">
             <h2>Налаштування</h2>
+            
+            <div class="toggle-container">
+                <span>Використовувати проксі 
+                    <div class="tooltip">ℹ️
+                        <span class="tooltip-text">Обхід обмежень CORS за допомогою проксі-сервера</span>
+                    </div>
+                </span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="useProxy" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
             
             <div class="toggle-container">
                 <span>TensorFlow.js 

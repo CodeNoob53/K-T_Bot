@@ -10,12 +10,14 @@ import * as utils from './utils.js';
 // Основні елементи інтерфейсу
 const botNameInput = document.getElementById('botName');
 const gamePinInput = document.getElementById('gamePin');
+const proxyUrlInput = document.getElementById('proxyUrl');
 const startBotBtn = document.getElementById('startBot');
 const stopBotBtn = document.getElementById('stopBot');
 const statusIndicator = document.getElementById('botStatus');
 const logContainer = document.getElementById('logContainer');
 
 // Елементи налаштувань
+const useProxyToggle = document.getElementById('useProxy');
 const useTensorflowToggle = document.getElementById('useTensorflow');
 const useML5Toggle = document.getElementById('useML5');
 const useSearchToggle = document.getElementById('useSearch');
@@ -43,8 +45,40 @@ function validateForm() {
         logMessage('Помилка: Введіть коректний PIN-код гри (6-10 цифр)', 'error');
         return false;
     }
+
+    if (useProxyToggle.checked) {
+        const proxyUrl = proxyUrlInput.value.trim();
+        if (!proxyUrl) {
+            logMessage('Помилка: Введіть URL проксі-сервера або вимкніть використання проксі', 'error');
+            return false;
+        }
+    }
     
     return true;
+}
+
+// Перевірка проксі-сервера
+async function checkProxyServer(proxyUrl) {
+    try {
+        logMessage('Перевірка доступності проксі-сервера...', 'info');
+        
+        const response = await fetch(`${proxyUrl.replace(/\/kahoot-api\/?$/, '')}`, {
+            method: 'GET',
+            mode: 'cors',
+            timeout: 5000
+        });
+        
+        if (response.ok) {
+            logMessage('Проксі-сервер доступний', 'success');
+            return true;
+        } else {
+            logMessage(`Проксі-сервер недоступний. Статус: ${response.status}`, 'error');
+            return false;
+        }
+    } catch (error) {
+        logMessage(`Помилка підключення до проксі-сервера: ${error.message}`, 'error');
+        return false;
+    }
 }
 
 // Обробник події для кнопки запуску бота
@@ -60,18 +94,33 @@ startBotBtn.addEventListener('click', async function() {
         return;
     }
     
+    // Перевірка проксі-сервера, якщо увімкнено
+    if (useProxyToggle.checked) {
+        const proxyUrl = proxyUrlInput.value.trim();
+        const proxyAvailable = await checkProxyServer(proxyUrl);
+        
+        if (!proxyAvailable) {
+            logMessage('Попередження: Проксі-сервер недоступний. Запуск проксі-сервера...', 'warn');
+            logMessage('Для запуску проксі виконайте в терміналі: node proxy-server.js', 'info');
+            return;
+        }
+    }
+    
     logMessage('Ініціалізація бота...', 'info');
     startBotBtn.disabled = true;
     
     try {
         const botName = botNameInput.value.trim();
         const gamePin = gamePinInput.value.trim();
+        const proxyUrl = proxyUrlInput.value.trim();
         
         // Налаштування бота
         const botOptions = {
             useTensorflow: useTensorflowToggle.checked,
             useML5: useML5Toggle.checked,
             useSearch: useSearchToggle.checked,
+            useProxy: useProxyToggle.checked,
+            proxyUrl: proxyUrl,
             delay: { min: 500, max: 2000 },
             logCallback: logMessage
         };
@@ -91,7 +140,9 @@ startBotBtn.addEventListener('click', async function() {
         // Ініціалізація пошукового рушія
         if (botOptions.useSearch) {
             const searchEngine = new SearchEngine({
-                logCallback: logMessage
+                logCallback: logMessage,
+                useProxy: botOptions.useProxy,
+                proxyUrl: botOptions.proxyUrl
             });
             
             botOptions.searchEngine = searchEngine;
@@ -118,7 +169,9 @@ startBotBtn.addEventListener('click', async function() {
                 name: botName,
                 useTensorflow: botOptions.useTensorflow,
                 useML5: botOptions.useML5,
-                useSearch: botOptions.useSearch
+                useSearch: botOptions.useSearch,
+                useProxy: botOptions.useProxy,
+                proxyUrl: botOptions.proxyUrl
             });
         } else {
             startBotBtn.disabled = false;
@@ -180,6 +233,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (savedSettings.useSearch !== undefined) {
             useSearchToggle.checked = savedSettings.useSearch;
+        }
+        
+        if (savedSettings.useProxy !== undefined) {
+            useProxyToggle.checked = savedSettings.useProxy;
+        }
+        
+        if (savedSettings.proxyUrl) {
+            proxyUrlInput.value = savedSettings.proxyUrl;
         }
     }
     

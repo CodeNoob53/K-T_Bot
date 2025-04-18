@@ -11,7 +11,9 @@ class KahootBot {
             useTensorflow: options.useTensorflow || false,
             useML5: options.useML5 || false,
             useSearch: options.useSearch || false,
-            delay: options.delay || { min: 500, max: 2000 }  // Затримка перед відповіддю в мс
+            delay: options.delay || { min: 500, max: 2000 },  // Затримка перед відповіддю в мс
+            useProxy: options.useProxy !== false, // Увімкнення проксі за замовчуванням
+            proxyUrl: options.proxyUrl || 'http://localhost:3000/kahoot-api' // URL проксі-сервера
         };
         
         this.currentQuestion = null;
@@ -23,13 +25,13 @@ class KahootBot {
         this.connected = false;
         this.logCallback = options.logCallback || console.log;
         
-        // Налаштування моделей ML, якщо увімкнено
-        if (this.options.useTensorflow) {
-            this.initTensorflow();
-        }
+        // Прив'язка модулів аналізу, якщо вони передані
+        this.mlAnalyzer = options.mlAnalyzer || null;
+        this.searchEngine = options.searchEngine || null;
         
-        if (this.options.useML5) {
-            this.initML5();
+        // Налаштування моделей ML, якщо увімкнено
+        if (this.options.useTensorflow || this.options.useML5) {
+            this.initMLComponents();
         }
     }
     
@@ -38,17 +40,47 @@ class KahootBot {
         this.logCallback(`[${new Date().toLocaleTimeString()}] ${message}`);
     }
     
+    // Ініціалізація компонентів машинного навчання
+    async initMLComponents() {
+        try {
+            this.log('Ініціалізація компонентів ML...');
+            
+            // Якщо є зовнішній аналізатор ML, використовуємо його
+            if (this.mlAnalyzer) {
+                await this.mlAnalyzer.initialize();
+                this.log('Зовнішній ML аналізатор ініціалізовано');
+                return;
+            }
+            
+            // Інакше ініціалізуємо вбудовані компоненти
+            if (this.options.useTensorflow) {
+                this.initTensorflow();
+            }
+            
+            if (this.options.useML5) {
+                this.initML5();
+            }
+        } catch (error) {
+            this.log(`Помилка ініціалізації ML компонентів: ${error.message}`);
+        }
+    }
+    
     // Ініціалізація TensorFlow.js
     async initTensorflow() {
         try {
             this.log('Ініціалізація TensorFlow.js...');
             
+            // Перевірка доступності TensorFlow
+            if (typeof tf === 'undefined') {
+                throw new Error('TensorFlow.js недоступний. Перевірте підключення бібліотеки.');
+            }
+            
             // Завантаження моделі для NLP аналізу
-            this.tfModel = await tf.loadLayersModel('https://example.com/tfjs-models/nlp-model/model.json');
+            this.tfModel = await tf.loadLayersModel('models/model.json');
             
             // Завантаження токенізатора або відображення слів
-            this.wordIndex = await fetch('https://example.com/tfjs-models/nlp-model/word_index.json')
-                .then(response => response.json());
+            const response = await fetch('models/word_index.json');
+            this.wordIndex = await response.json();
                 
             this.log('TensorFlow.js модель успішно завантажена');
         } catch (error) {
@@ -61,8 +93,16 @@ class KahootBot {
         try {
             this.log('Ініціалізація ML5.js...');
             
+            // Перевірка доступності ML5
+            if (typeof ml5 === 'undefined') {
+                throw new Error('ML5.js недоступний. Перевірте підключення бібліотеки.');
+            }
+            
             // Ініціалізація класифікатора тексту
-            this.textClassifier = await ml5.imageClassifier('MobileNet');
+            this.textClassifier = await ml5.neuralNetwork({
+                task: 'classification',
+                debug: false
+            });
             
             this.log('ML5.js компоненти успішно ініціалізовані');
         } catch (error) {
@@ -75,8 +115,17 @@ class KahootBot {
         try {
             this.log(`Підключення до гри Kahoot з PIN: ${this.pin}...`);
             
+            // Формування URL для запиту до API
+            let apiUrl = `https://kahoot.it/reserve/session/${this.pin}`;
+            
+            // Використання проксі, якщо увімкнено
+            if (this.options.useProxy) {
+                apiUrl = `${this.options.proxyUrl}/reserve/session/${this.pin}`;
+                this.log('Використання проксі-сервера для запитів до Kahoot API');
+            }
+            
             // Перший крок: отримання session token
-            const sessionResponse = await fetch(`https://kahoot.it/reserve/session/${this.pin}`, {
+            const sessionResponse = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -85,15 +134,24 @@ class KahootBot {
             });
             
             if (!sessionResponse.ok) {
-                throw new Error(`Не вдалося підключитися до гри. Перевірте PIN-код.`);
+                throw new Error(`Не вдалося підключитися до гри. Перевірте PIN-код. Статус: ${sessionResponse.status}`);
             }
             
             const sessionData = await sessionResponse.json();
             this.sessionToken = sessionData.token;
             this.challengeToken = sessionData.challenge;
             
+            // Формування WebSocket URL
+            let wsUrl = `wss://kahoot.it/cometd/${this.pin}/${this.sessionToken}`;
+            
+            // Якщо використовуємо проксі, додатково логуємо це
+            if (this.options.useProxy) {
+                this.log('Використання прямого WebSocket з\'єднання з Kahoot');
+                // Примітка: для WebSocket з'єднання проксі потрібно налаштувати окремо
+            }
+            
             // Другий крок: створення WebSocket з'єднання
-            this.socket = new WebSocket(`wss://kahoot.it/cometd/${this.pin}/${this.sessionToken}`);
+            this.socket = new WebSocket(wsUrl);
             
             // Встановлення обробників подій для WebSocket
             this.socket.onopen = this.handleSocketOpen.bind(this);

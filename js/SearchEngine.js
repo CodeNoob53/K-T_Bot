@@ -5,7 +5,7 @@ class SearchEngine {
         this.apiKey = options.apiKey || '';
         this.searchEngineId = options.searchEngineId || '';
         this.useProxy = options.useProxy || false;
-        this.proxyUrl = options.proxyUrl || '';
+        this.proxyUrl = options.proxyUrl || 'http://localhost:3000/search-api';
         this.cacheEnabled = options.cacheEnabled !== false;
         this.cache = {};
         this.logCallback = options.logCallback || console.log;
@@ -38,7 +38,9 @@ class SearchEngine {
             
             // Використання проксі, якщо необхідно
             if (this.useProxy) {
-                url = `${this.proxyUrl}?url=${encodeURIComponent(url)}`;
+                // Змінено формат звернення до проксі
+                url = `${this.proxyUrl}/customsearch?${params.toString()}`;
+                this.log(`Використання проксі-сервера для запиту: ${url}`);
             }
             
             // Виконання запиту
@@ -84,7 +86,13 @@ class SearchEngine {
             this.log(`Виконання пошуку DuckDuckGo для: "${query}"`);
             
             // Формування URL для запиту до DuckDuckGo
-            const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`;
+            let url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`;
+            
+            // Використання проксі, якщо необхідно
+            if (this.useProxy) {
+                url = `${this.proxyUrl}/duckduckgo?q=${encodeURIComponent(query)}&format=json`;
+                this.log(`Використання проксі-сервера для запиту DuckDuckGo: ${url}`);
+            }
             
             // Виконання запиту
             const response = await fetch(url);
@@ -143,7 +151,17 @@ class SearchEngine {
             const query = question;
             
             // Виконання пошуку
-            const results = await this.searchGoogle(query);
+            let results = [];
+            
+            // Спочатку пробуємо Google, якщо доступний API ключ
+            if (this.apiKey && this.searchEngineId) {
+                results = await this.searchGoogle(query);
+            }
+            
+            // Якщо немає результатів, пробуємо DuckDuckGo
+            if (results.length === 0) {
+                results = await this.searchDuckDuckGo(query);
+            }
             
             if (results.length === 0) {
                 this.log('Не знайдено результатів пошуку');
@@ -193,98 +211,6 @@ class SearchEngine {
             this.log(`Помилка пошуку відповіді: ${error.message}`);
             return { index: -1, confidence: 0 };
         }
-    }
-    
-    // Використання TensorFlow для аналізу релевантності результатів
-    async analyzeTfIdf(question, options, searchResults) {
-        try {
-            // Створення корпусу документів з результатів пошуку і варіантів відповідей
-            const documents = searchResults.map(r => `${r.title} ${r.snippet}`);
-            
-            // Додавання питання та варіантів відповідей до корпусу
-            documents.push(question);
-            options.forEach(opt => documents.push(opt));
-            
-            // Створення словника термінів
-            const terms = new Set();
-            documents.forEach(doc => {
-                const words = doc.toLowerCase().match(/\b\w+\b/g) || [];
-                words.forEach(word => {
-                    if (word.length > 2) { // Ігноруємо короткі слова
-                        terms.add(word);
-                    }
-                });
-            });
-            
-            // Обчислення TF-IDF матриці
-            const termsList = Array.from(terms);
-            const tfidfMatrix = [];
-            
-            documents.forEach(doc => {
-                const vector = new Array(termsList.length).fill(0);
-                const words = doc.toLowerCase().match(/\b\w+\b/g) || [];
-                const wordCount = words.length;
-                
-                // Term Frequency (TF)
-                words.forEach(word => {
-                    if (word.length > 2) {
-                        const index = termsList.indexOf(word);
-                        if (index !== -1) {
-                            vector[index] += 1 / wordCount;
-                        }
-                    }
-                });
-                
-                // Inverse Document Frequency (IDF)
-                termsList.forEach((term, i) => {
-                    // Кількість документів, що містять термін
-                    const docFreq = documents.filter(d => 
-                        d.toLowerCase().match(new RegExp(`\\b${term}\\b`, 'g'))
-                    ).length;
-                    
-                    // IDF
-                    const idf = Math.log(documents.length / (1 + docFreq));
-                    
-                    // TF-IDF
-                    vector[i] *= idf;
-                });
-                
-                tfidfMatrix.push(vector);
-            });
-            
-            // Обчислення косинусної подібності між питанням та варіантами відповідей
-            const questionVector = tfidfMatrix[tfidfMatrix.length - options.length - 1];
-            const similarities = [];
-            
-            for (let i = 0; i < options.length; i++) {
-                const optionVector = tfidfMatrix[tfidfMatrix.length - options.length + i];
-                const similarity = this.cosineSimilarity(questionVector, optionVector);
-                similarities.push({ index: i, score: similarity });
-            }
-            
-            // Вибір варіанту з найвищою подібністю
-            similarities.sort((a, b) => b.score - a.score);
-            
-            return {
-                index: similarities[0].index,
-                confidence: similarities[0].score
-            };
-        } catch (error) {
-            this.log(`Помилка TF-IDF аналізу: ${error.message}`);
-            return { index: -1, confidence: 0 };
-        }
-    }
-    
-    // Розрахунок косинусної подібності між векторами
-    cosineSimilarity(vecA, vecB) {
-        const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
-        
-        const normA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
-        const normB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
-        
-        if (normA === 0 || normB === 0) return 0;
-        
-        return dotProduct / (normA * normB);
     }
     
     // Очищення кешу
