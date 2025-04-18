@@ -20,19 +20,49 @@
       <h1>Kahoot Bot</h1>
 
       <!-- Основна форма -->
-      <div class="input-group">
-        <label for="botName">Ім'я бота:</label>
-        <input
-          type="text"
-          id="botName"
-          placeholder="Введіть ім'я бота"
-          maxlength="15"
-        />
-      </div>
+      <div class="form-grid">
+        <div class="input-group">
+          <label for="botName">Ім'я бота:</label>
+          <input
+            type="text"
+            id="botName"
+            placeholder="Введіть ім'я бота"
+            maxlength="15"
+          />
+        </div>
 
-      <div class="input-group">
-        <label for="gamePin">PIN-код гри:</label>
-        <input type="number" id="gamePin" placeholder="Введіть PIN гри" />
+        <div class="input-group">
+          <label for="gamePin">PIN-код гри:</label>
+          <input type="number" id="gamePin" placeholder="Введіть PIN гри" />
+        </div>
+        
+        <div class="input-group">
+          <label for="proxyUrl">
+            Адреса проксі:
+            <div class="tooltip">
+              ℹ️
+              <span class="tooltip-text">
+                Формат: IP:PORT
+              </span>
+            </div>
+          </label>
+          <input type="text" id="proxyUrl" placeholder="IP:PORT" required />
+        </div>
+      </div>
+      
+      <!-- Інформаційна панель проксі -->
+      <div class="proxy-info-panel" id="proxyInfoPanel">
+        <div class="proxy-details">
+          <span class="proxy-detail">IP: <span id="proxyIp"></span></span>
+          <span class="proxy-detail">Порт: <span id="proxyPort"></span></span>
+          <span class="proxy-detail">Логін: <span id="proxyLogin"></span></span>
+          <span class="proxy-detail">Пароль: <span id="proxyPassword"></span></span>
+        </div>
+        <div class="proxy-status" id="proxyStatusContainer">
+          <div class="status-indicator" id="proxyStatusIndicator"></div>
+          <span id="proxyStatusText">Статус підключення: не перевірено</span>
+        </div>
+        <button id="testProxy" class="btn btn-small">Перевірити проксі</button>
       </div>
 
       <!-- Налаштування -->
@@ -43,121 +73,58 @@
             <button class="accordion-toggle" id="settingsToggle">▼</button>
           </div>
           <div class="accordion-content" id="settingsContent">
-            <div class="toggle-container">
-              <span
-                >Використовувати проксі
-                <div class="tooltip">
-                  ℹ️
-                  <span class="tooltip-text"
-                    >Обхід обмежень CORS за допомогою проксі-сервера</span
-                  >
-                </div>
-              </span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="useProxy" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
+            <div class="toggle-grid">
+              <div class="toggle-container">
+                <span>
+                  TensorFlow.js
+                  <div class="tooltip">
+                    ℹ️
+                    <span class="tooltip-text">Використовує нейромережу для аналізу питань</span>
+                  </div>
+                </span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="useTensorflow" checked />
+                  <span class="slider"></span>
+                </label>
+              </div>
 
-            <div class="toggle-container">
-              <span
-                >TensorFlow.js
-                <div class="tooltip">
-                  ℹ️
-                  <span class="tooltip-text"
-                    >Використовує нейромережу для аналізу питань</span
-                  >
-                </div>
-              </span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="useTensorflow" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
+              <div class="toggle-container">
+                <span>
+                  ML5.js
+                  <div class="tooltip">
+                    ℹ️
+                    <span class="tooltip-text">Використовує машинне навчання для класифікації питань</span>
+                  </div>
+                </span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="useML5" checked />
+                  <span class="slider"></span>
+                </label>
+              </div>
 
-            <div class="toggle-container">
-              <span
-                >ML5.js
-                <div class="tooltip">
-                  ℹ️
-                  <span class="tooltip-text"
-                    >Використовує машинне навчання для класифікації питань</span
-                  >
-                </div>
-              </span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="useML5" checked />
-                <span class="slider"></span>
-              </label>
+              <div class="toggle-container">
+                <span>
+                  Пошук в інтернеті
+                  <div class="tooltip">
+                    ℹ️
+                    <span class="tooltip-text">Шукає відповіді в інтернеті</span>
+                  </div>
+                </span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="useSearch" checked />
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
-
-            <div class="toggle-container">
-              <span
-                >Пошук в інтернеті
-                <div class="tooltip">
-                  ℹ️
-                  <span class="tooltip-text">Шукає відповіді в інтернеті</span>
-                </div>
-              </span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="useSearch" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Акордіон з проксі -->
-      <div class="settings-section">
-        <div class="accordion">
-          <div class="accordion-header" id="proxyHeader">
-            <span>Налаштування проксі</span>
-            <button class="accordion-toggle" id="proxyToggle">▼</button>
-          </div>
-          <div class="accordion-content" id="proxySettings">
-            <div class="input-group">
-              <label for="proxyUrl"
-                >Адреса проксі:
-                <div class="tooltip">
-                  ℹ️
-                  <span class="tooltip-text"
-                    >Формати: IP:PORT, IP:PORT:LOGIN:PASSWORD або
-                    http://login:password@host:port</span
-                  >
-                </div>
-              </label>
-              <input
-                type="text"
-                id="proxyUrl"
-                placeholder="Your proxy..."
-              />
-            </div>
-            <div class="proxy-format-note">
-              <small
-                >Можна ввести в форматі: IP:PORT:LOGIN:PASSWORD, тоді поля нижче
-                заповняться автоматично</small
-              >
-            </div>
-            
-            <div class="proxy-info-panel" id="proxyInfoPanel"></div>
-
-            <div class="proxy-status" id="proxyStatusContainer">
-              <div class="status-indicator" id="proxyStatusIndicator"></div>
-              <span id="proxyStatusText"
-                >Статус підключення: не перевірено</span
-              >
-            </div>
-            <button id="testProxy" class="btn btn-small">
-              Перевірити проксі
-            </button>
           </div>
         </div>
       </div>
 
       <!-- Кнопки керування -->
-      <button id="startBot" class="btn">Запустити бота</button>
-      <button id="stopBot" class="btn btn-stop" disabled>Зупинити бота</button>
+      <div class="button-group">
+        <button id="startBot" class="btn">Запустити бота</button>
+        <button id="stopBot" class="btn btn-stop" disabled>Зупинити бота</button>
+      </div>
 
       <!-- Статус та логи -->
       <div class="status">

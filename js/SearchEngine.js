@@ -220,4 +220,4 @@ class SearchEngine {
     }
 }
 
-export default SearchEngine;
+export { SearchEngine };

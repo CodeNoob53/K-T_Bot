@@ -397,78 +397,45 @@ function formatProxyUrl(url, username, password) {
     }
 }
 
-// Розбір URL проксі на компоненти
+// Функція розбору введеного URL проксі
 function parseProxyUrl(url) {
-    // Перевірка на спеціальний формат
-    const parts = url.split(':');
-    if (parts.length === 4) {
-        return {
-            url: `http://${parts[0]}:${parts[1]}`,
-            username: parts[2],
-            password: parts[3]
-        };
-    }
-    
     try {
-        if (!url) return { url: '', username: '', password: '' };
-        
-        // Додаємо протокол для коректного парсингу
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            url = 'http://' + url;
-        }
-        
-        try {
-            const urlObj = new URL(url);
-            
-            // Отримуємо компоненти URL
-            const username = urlObj.username ? decodeURIComponent(urlObj.username) : '';
-            const password = urlObj.password ? decodeURIComponent(urlObj.password) : '';
-            
-            // Видаляємо автентифікацію з URL
-            urlObj.username = '';
-            urlObj.password = '';
-            
-            return {
-                url: urlObj.toString(),
-                username,
-                password
-            };
-        } catch (urlError) {
-            // Якщо виникла помилка з URL, спробуємо розібрати вручну
-            const protocolSplit = url.split('://');
-            const protocol = protocolSplit[0];
-            let restOfUrl = protocolSplit[1] || '';
-            
-            let username = '';
-            let password = '';
-            
-            // Шукаємо дані автентифікації
-            if (restOfUrl.includes('@')) {
-                const authSplit = restOfUrl.split('@');
-                const authPart = authSplit[0];
-                restOfUrl = authSplit[1];
-                
-                if (authPart.includes(':')) {
-                    const credentialsSplit = authPart.split(':');
-                    username = decodeURIComponent(credentialsSplit[0] || '');
-                    password = decodeURIComponent(credentialsSplit[1] || '');
-                } else {
-                    username = decodeURIComponent(authPart);
-                }
+      // Перевірка на формат IP:PORT:LOGIN:PASSWORD
+      const parts = url.split(':');
+      if (parts.length === 4) {
+        const [host, port, username, password] = parts;
+        // Перевірка IP та PORT
+        if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) && /^\d+$/.test(port)) {
+          return {
+            host,
+            port: parseInt(port, 10),
+            auth: {
+              username,
+              password
             }
-            
-            return {
-                url: `${protocol}://${restOfUrl}`,
-                username,
-                password
-            };
+          };
         }
+      }
+      // Перевірка на формат IP:PORT
+      else if (parts.length === 2) {
+        const [host, port] = parts;
+        // Перевірка IP та PORT
+        if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) && /^\d+$/.test(port)) {
+          return {
+            host,
+            port: parseInt(port, 10),
+            // Використовуємо існуючі дані автентифікації
+            auth: proxyConfig.auth
+          };
+        }
+      }
+      
+      throw new Error('Невірний формат проксі. Використовуйте формат IP:PORT або IP:PORT:LOGIN:PASSWORD');
     } catch (error) {
-        console.error('Помилка розбору URL проксі:', error);
-        return { url: '', username: '', password: '' };
+      logMessage(`Помилка розбору проксі URL: ${error.message}`, 'error');
+      return null;
     }
-}
-
+  }
 // Перевірка валідності URL проксі
 function isValidProxyUrl(url) {
     // Перевірка на спеціальний формат

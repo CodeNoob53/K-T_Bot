@@ -661,3 +661,5 @@ class KahootBot {
     }
   }
 }
+
+export { KahootBot };

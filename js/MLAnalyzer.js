@@ -343,4 +343,4 @@ class MLAnalyzer {
     }
 }
 
-export default MLAnalyzer;
+export { MLAnalyzer }
