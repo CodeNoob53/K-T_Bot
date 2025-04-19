@@ -129,76 +129,153 @@ class KahootBot {
   }
 
   // Підключення до сервера Kahoot через проксі-сервер на Render.com
-  async connect() {
-    try {
-        this.log(`Підключення до гри Kahoot з PIN: ${this.pin}...`);
-        
-        // Формування URL для відправки запиту через проксі на Render
-        const proxyKahootSessionUrl = `${this.proxyServerUrl}/kahoot-api/reserve/session/${this.pin}`;
-        
-        this.log(`Отримання сесійного токену через проксі-сервер: ${proxyKahootSessionUrl}`);
-        
-        // Отримання сесійного токену через проксі-сервер
-        const response = await fetch(proxyKahootSessionUrl);
-        
-        if (!response.ok) {
-            throw new Error(`Помилка відповіді від проксі-сервера: ${response.status} ${response.statusText}`);
-        }
-        
-        const sessionData = await response.json();
-        this.log(`Отримана відповідь від сервера: ${JSON.stringify(sessionData)}`);
-        
-        // Перевірка отриманих даних - оновлено для відповідності актуальному формату API Kahoot
-        if (!sessionData || !sessionData.liveGameId) {
-            throw new Error('Не вдалося отримати токен сесії (liveGameId)');
-        }
-        
-        // Зберігаємо токени з правильних полів
-        this.sessionToken = sessionData.liveGameId;
-        this.challengeToken = sessionData.challenge || '';
-        
-        this.log(`Отримано токен сесії: ${this.sessionToken.substring(0, 10)}...`);
-        
-        // Створення WebSocket з'єднання через проксі-сервер на Render
-        // Примітка: WebSocket URL потрібно змінити з http:// на ws:// або з https:// на wss://
-        const wsProtocol = this.proxyServerUrl.startsWith('https://') ? 'wss://' : 'ws://';
-        const hostPart = this.proxyServerUrl.replace('https://', '').replace('http://', '');
-        const wsUrl = `${wsProtocol}${hostPart}/kahoot-ws/cometd/${this.pin}/${this.sessionToken}`;
-        
-        this.log(`Підключення WebSocket через проксі: ${wsUrl}`);
-        
-        this.socket = new WebSocket(wsUrl);
-        
-        // Встановлення обробників подій для WebSocket
-        this.socket.onopen = this.handleSocketOpen.bind(this);
-        this.socket.onmessage = this.handleSocketMessage.bind(this);
-        this.socket.onerror = this.handleSocketError.bind(this);
-        this.socket.onclose = this.handleSocketClose.bind(this);
-        
-        return new Promise((resolve, reject) => {
-            // Таймаут для підключення
-            const connectionTimeout = setTimeout(() => {
-                reject(new Error('Таймаут підключення до гри'));
-            }, 10000);
-            
-            // Успішне підключення
-            this.socket.addEventListener('open', () => {
-                clearTimeout(connectionTimeout);
-                this.connected = true;
-                resolve(true);
-            }, { once: true });
-            
-            // Помилка підключення
-            this.socket.addEventListener('error', (error) => {
-                clearTimeout(connectionTimeout);
-                this.log(`Помилка WebSocket з'єднання: ${error.message || 'Невідома помилка'}`);
-                reject(error);
-            }, { once: true });
-        });
-    } catch (error) {
-        this.log(`Помилка підключення: ${error.message}`);
-        return false;
-    }
+// Оновлений метод connect() для класу KahootBot
+async connect() {
+  try {
+      this.log(`Підключення до гри Kahoot з PIN: ${this.pin}...`);
+      
+      // Формування URL для відправки запиту через проксі на Render
+      const proxyKahootSessionUrl = `${this.proxyServerUrl}/kahoot-api/reserve/session/${this.pin}`;
+      
+      this.log(`Отримання сесійного токену через проксі-сервер: ${proxyKahootSessionUrl}`);
+      
+      // Отримання сесійного токену через проксі-сервер
+      const response = await fetch(proxyKahootSessionUrl);
+      
+      if (!response.ok) {
+          throw new Error(`Помилка відповіді від проксі-сервера: ${response.status} ${response.statusText}`);
+      }
+      
+      const sessionData = await response.json();
+      this.log(`Отримана відповідь від сервера: ${JSON.stringify(sessionData)}`);
+      
+      // Перевірка отриманих даних
+      if (!sessionData || !sessionData.liveGameId) {
+          throw new Error('Не вдалося отримати токен сесії (liveGameId)');
+      }
+      
+      // Зберігаємо токени з правильних полів
+      this.sessionToken = sessionData.liveGameId;
+      
+      // Розв'язання challenge-токену якщо він є
+      if (sessionData.challenge) {
+          this.log('Розшифрування challenge-токену...');
+          
+          try {
+              const solveResponse = await fetch(`${this.proxyServerUrl}/kahoot-api/solve-challenge`, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ challenge: sessionData.challenge })
+              });
+              
+              if (!solveResponse.ok) {
+                  throw new Error(`Помилка розшифрування токену: ${solveResponse.status} ${solveResponse.statusText}`);
+              }
+              
+              const solveData = await solveResponse.json();
+              
+              if (solveData.success && solveData.token) {
+                  this.challengeToken = solveData.token;
+                  this.log(`Отримано розшифрований challenge-токен: ${this.challengeToken.substring(0, 10)}...`);
+              } else {
+                  throw new Error('Не вдалося отримати розшифрований токен');
+              }
+          } catch (solveError) {
+              this.log(`Помилка розшифрування challenge-токену: ${solveError.message}`);
+              // Продовжуємо підключення без challenge-токену
+          }
+      }
+      
+      this.log(`Отримано токен сесії: ${this.sessionToken.substring(0, 10)}...`);
+      
+      // Формування URL для WebSocket з'єднання
+      // Змінено формат звернення до проксі-сервера з додаванням challenge-токену
+      let wsUrl;
+      
+      const wsProtocol = this.proxyServerUrl.startsWith('https://') ? 'wss://' : 'ws://';
+      const hostPart = this.proxyServerUrl.replace('https://', '').replace('http://', '');
+      
+      if (this.challengeToken) {
+          // Додаємо challenge-токен до URL
+          wsUrl = `${wsProtocol}${hostPart}/kahoot-ws/cometd/${this.pin}/${this.sessionToken}/${this.challengeToken}`;
+      } else {
+          // Підключення без challenge-токену
+          wsUrl = `${wsProtocol}${hostPart}/kahoot-ws/cometd/${this.pin}/${this.sessionToken}`;
+      }
+      
+      this.log(`Підключення WebSocket через проксі: ${wsUrl}`);
+      
+      this.socket = new WebSocket(wsUrl);
+      
+      // Встановлення обробників подій для WebSocket
+      this.socket.onopen = this.handleSocketOpen.bind(this);
+      this.socket.onmessage = this.handleSocketMessage.bind(this);
+      this.socket.onerror = this.handleSocketError.bind(this);
+      this.socket.onclose = this.handleSocketClose.bind(this);
+      
+      return new Promise((resolve, reject) => {
+          // Таймаут для підключення
+          const connectionTimeout = setTimeout(() => {
+              reject(new Error('Таймаут підключення до гри'));
+          }, 10000);
+          
+          // Успішне підключення
+          this.socket.addEventListener('open', () => {
+              clearTimeout(connectionTimeout);
+              this.connected = true;
+              resolve(true);
+          }, { once: true });
+          
+          // Помилка підключення
+          this.socket.addEventListener('error', (error) => {
+              clearTimeout(connectionTimeout);
+              this.log(`Помилка WebSocket з'єднання: ${error.message || 'Невідома помилка'}`);
+              reject(error);
+          }, { once: true });
+      });
+  } catch (error) {
+      this.log(`Помилка підключення: ${error.message}`);
+      return false;
+  }
+}
+
+// Оновлення обробки challenge-токену класу KahootBot
+async solveChallenge(challengeData) {
+  try {
+      // Отримуємо функцію decode з challenge-токену
+      const challenge = challengeData.challenge;
+      if (!challenge) {
+          throw new Error('Challenge токен не знайдено');
+      }
+      
+      this.log('Розв\'язання challenge-токену...');
+      
+      // Надсилаємо запит до проксі-сервера для декодування challenge
+      const solveUrl = `${this.proxyServerUrl}/kahoot-api/solve-challenge`;
+      const response = await fetch(solveUrl, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ challenge })
+      });
+      
+      if (!response.ok) {
+          throw new Error(`Помилка вирішення challenge: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      if (!result.token) {
+          throw new Error('Не вдалося отримати розв\'язаний токен');
+      }
+      
+      return result.token;
+  } catch (error) {
+      this.log(`Помилка розв'язання challenge: ${error.message}`);
+      return null;
+  }
 }
 
   // Обробник відкриття WebSocket з'єднання
@@ -259,7 +336,6 @@ sendClientInfo() {
   }
 
   // Обробник повідомлень WebSocket
-// Обробник повідомлень WebSocket
 async handleSocketMessage(event) {
   try {
     // Додаємо логування для аналізу формату даних
