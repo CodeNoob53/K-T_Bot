@@ -9,7 +9,7 @@ import { SearchEngine } from './SearchEngine.js';
 import * as utils from './utils.js';
 
 // Адреса проксі-сервера на Render.com
-// !!! ВАЖЛИВО: Замініть цей URL на вашу реальну адресу додатку на Render.com
+// !!! ВАЖЛИВО: Тут має бути точна адреса вашого Render.com сервера
 const PROXY_SERVER_URL = 'https://kahootbot-serve.onrender.com';
 
 // Основні елементи інтерфейсу
@@ -147,7 +147,11 @@ function validateForm() {
 
 // Формування URL проксі-сервера
 function getProxyServerUrl() {
-  // Використовуємо глобальну константу, яка задана на початку файлу
+  // Перевіряємо, що сервер доступний за вказаною адресою
+  if (!PROXY_SERVER_URL || PROXY_SERVER_URL.includes('your-render-app-name')) {
+    logMessage('Помилка: URL проксі-сервера не налаштований правильно', 'error');
+    return null;
+  }
   return PROXY_SERVER_URL;
 }
 
@@ -155,6 +159,12 @@ function getProxyServerUrl() {
 async function updateServerProxyConfig() {
   try {
     const proxyServerUrl = getProxyServerUrl();
+    if (!proxyServerUrl) {
+      throw new Error('URL проксі-сервера не вказано або вказано неправильно');
+    }
+
+    logMessage(`Надсилання налаштувань проксі на сервер: ${proxyServerUrl}/set-proxy`, 'info');
+    
     const response = await fetch(`${proxyServerUrl}/set-proxy`, {
       method: 'POST',
       headers: {
@@ -185,7 +195,23 @@ async function updateServerProxyConfig() {
 async function checkProxyServerConnection() {
   try {
     const proxyServerUrl = getProxyServerUrl();
+    if (!proxyServerUrl) {
+      return false;
+    }
+    
     logMessage('Перевірка з\'єднання з проксі-сервером...', 'info');
+    
+    // Перевіряємо з'єднання з проксі-сервером
+    const testConnectionResponse = await fetch(`${proxyServerUrl}/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!testConnectionResponse.ok) {
+      throw new Error(`Не вдалося з'єднатися з проксі-сервером: ${testConnectionResponse.status}`);
+    }
     
     // Спочатку оновлюємо конфігурацію проксі на сервері
     const configUpdated = await updateServerProxyConfig();
@@ -193,16 +219,25 @@ async function checkProxyServerConnection() {
       return false;
     }
     
-    const response = await fetch(`${proxyServerUrl}/`);
+    // Перевіряємо, чи правильно налаштовано проксі
+    const testProxyResponse = await fetch(`${proxyServerUrl}/test-proxy`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
     
-    if (response.ok) {
-      const data = await response.json();
-      logMessage(`Проксі-сервер доступний: ${JSON.stringify(data)}`, 'success');
-      return true;
-    } else {
-      logMessage(`Помилка з'єднання з проксі-сервером: ${response.status} ${response.statusText}`, 'error');
-      return false;
+    if (!testProxyResponse.ok) {
+      throw new Error(`Помилка перевірки проксі: ${testProxyResponse.status}`);
     }
+    
+    const testData = await testProxyResponse.json();
+    if (!testData.success) {
+      throw new Error(testData.message || 'Проксі не працює');
+    }
+    
+    logMessage(`Проксі-сервер доступний: ${JSON.stringify(testData)}`, 'success');
+    return true;
   } catch (error) {
     logMessage(`Помилка перевірки проксі-сервера: ${error.message}`, 'error');
     const proxyServerUrl = getProxyServerUrl();
@@ -236,6 +271,21 @@ async function checkProxy() {
   updateProxyDisplay();
   
   try {
+    // Перевіряємо з'єднання з сервером Render
+    const serverUrl = getProxyServerUrl();
+    if (!serverUrl) {
+      updateProxyStatus('error', 'Помилка: Не налаштовано URL проксі-сервера');
+      return;
+    }
+    
+    // Перевіряємо з'єднання
+    const response = await fetch(`${serverUrl}/`);
+    if (!response.ok) {
+      updateProxyStatus('error', `Помилка з'єднання з сервером: ${response.status}`);
+      return;
+    }
+    
+    // Перевіряємо конфігурацію проксі
     const isAvailable = await checkProxyServerConnection();
     
     if (isAvailable) {
@@ -250,6 +300,7 @@ async function checkProxy() {
     }
   } catch (error) {
     updateProxyStatus('error', `Помилка: ${error.message}`);
+    console.error('Помилка перевірки проксі:', error);
   }
 }
 
@@ -468,7 +519,14 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Початкове логування
   logMessage('Бот готовий до роботи. Введіть дані та натисніть "Запустити бота".', 'info');
-  logMessage(`Проксі-сервер налаштовано на ${PROXY_SERVER_URL}`, 'info');
+  
+  // Перевірка URL проксі-сервера
+  const proxyServerUrl = getProxyServerUrl();
+  if (proxyServerUrl) {
+    logMessage(`Проксі-сервер налаштовано на ${proxyServerUrl}`, 'info');
+  } else {
+    logMessage('УВАГА: URL проксі-сервера не налаштовано правильно!', 'error');
+  }
   
   // Перевірка наявності необхідних бібліотек
   setTimeout(async function() {
