@@ -146,14 +146,15 @@ class KahootBot {
         }
         
         const sessionData = await response.json();
+        this.log(`Отримана відповідь від сервера: ${JSON.stringify(sessionData)}`);
         
-        // Перевірка отриманих даних
-        if (!sessionData || !sessionData.token) {
-            throw new Error('Не вдалося отримати токен сесії');
+        // Перевірка отриманих даних - оновлено для відповідності актуальному формату API Kahoot
+        if (!sessionData || !sessionData.liveGameId) {
+            throw new Error('Не вдалося отримати токен сесії (liveGameId)');
         }
         
-        // Зберігаємо токени
-        this.sessionToken = sessionData.token;
+        // Зберігаємо токени з правильних полів
+        this.sessionToken = sessionData.liveGameId;
         this.challengeToken = sessionData.challenge || '';
         
         this.log(`Отримано токен сесії: ${this.sessionToken.substring(0, 10)}...`);
@@ -190,6 +191,7 @@ class KahootBot {
             // Помилка підключення
             this.socket.addEventListener('error', (error) => {
                 clearTimeout(connectionTimeout);
+                this.log(`Помилка WebSocket з'єднання: ${error.message || 'Невідома помилка'}`);
                 reject(error);
             }, { once: true });
         });
@@ -197,7 +199,7 @@ class KahootBot {
         this.log(`Помилка підключення: ${error.message}`);
         return false;
     }
-  }
+}
 
   // Обробник відкриття WebSocket з'єднання
   handleSocketOpen () {
@@ -206,24 +208,38 @@ class KahootBot {
   }
 
   // Відправка інформації про клієнта
-  sendClientInfo () {
-    this.log(`Відправка інформації про клієнта...`);
 
-    // Формування повідомлення для handshake
-    const handshakeMessage = {
-      id: Date.now(),
-      version: '1.0',
-      minimumVersion: '1.0',
-      channel: '/meta/handshake',
-      supportedConnectionTypes: ['websocket', 'long-polling'],
-      advice: {
-        timeout: 60000,
-        interval: 0
+sendClientInfo() {
+  this.log(`Відправка інформації про клієнта...`);
+
+  // Формування повідомлення для handshake - оновлено для останньої версії протоколу Kahoot
+  const handshakeMessage = {
+    id: Date.now(),
+    version: '1.0',
+    minimumVersion: '1.0',
+    channel: '/meta/handshake',
+    supportedConnectionTypes: ['websocket', 'long-polling'],
+    advice: {
+      timeout: 60000,
+      interval: 0
+    },
+    ext: {
+      ack: true,
+      timesync: {
+        tc: Date.now(),
+        l: 0,
+        o: 0
       }
-    };
+    }
+  };
 
+  try {
     this.socket.send(JSON.stringify([handshakeMessage]));
+    this.log('Handshake повідомлення відправлено');
+  } catch (error) {
+    this.log(`Помилка відправки handshake: ${error.message}`);
   }
+}
 
   // Відправка реєстраційної інформації
   registerUser () {
@@ -243,17 +259,37 @@ class KahootBot {
   }
 
   // Обробник повідомлень WebSocket
-  async handleSocketMessage (event) {
+// Обробник повідомлень WebSocket
+async handleSocketMessage(event) {
+  try {
+    // Додаємо логування для аналізу формату даних
+    this.log(`Отримано WebSocket повідомлення: ${event.data.substring(0, 100)}...`);
+    
+    let messages;
     try {
-      const messages = JSON.parse(event.data);
-
+      // Спробуємо розпарсити як JSON
+      messages = JSON.parse(event.data);
+    } catch (parseError) {
+      this.log(`Помилка розбору JSON: ${parseError.message}`);
+      return;
+    }
+    
+    // Перевіряємо тип даних - масив чи об'єкт
+    if (Array.isArray(messages)) {
+      // Якщо масив, обробляємо як раніше
       for (const message of messages) {
         await this.processMessage(message);
       }
-    } catch (error) {
-      this.log(`Помилка обробки повідомлення: ${error.message}`);
+    } else if (typeof messages === 'object' && messages !== null) {
+      // Якщо об'єкт, обробляємо як одне повідомлення
+      await this.processMessage(messages);
+    } else {
+      this.log(`Невідомий формат повідомлення: ${typeof messages}`);
     }
+  } catch (error) {
+    this.log(`Помилка обробки повідомлення: ${error.message}`);
   }
+}
 
   // Обробка отриманих повідомлень
   async processMessage (message) {
