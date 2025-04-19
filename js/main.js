@@ -10,7 +10,7 @@ import * as utils from './utils.js';
 
 // Адреса проксі-сервера на Render.com
 // !!! ВАЖЛИВО: Замініть цей URL на вашу реальну адресу додатку на Render.com
-const PROXY_SERVER_URL = 'https://your-render-app-name.onrender.com';
+const PROXY_SERVER_URL = 'https://kahootbot-serve.onrender.com';
 
 // Основні елементи інтерфейсу
 const botNameInput = document.getElementById('botName');
