@@ -284,38 +284,42 @@ async solveChallenge(challengeData) {
   }
 
   // Відправка інформації про клієнта
-
-sendClientInfo() {
-  this.log(`Відправка інформації про клієнта...`);
-
-  // Формування повідомлення для handshake - оновлено для останньої версії протоколу Kahoot
-  const handshakeMessage = {
-    id: Date.now(),
-    version: '1.0',
-    minimumVersion: '1.0',
-    channel: '/meta/handshake',
-    supportedConnectionTypes: ['websocket', 'long-polling'],
-    advice: {
-      timeout: 60000,
-      interval: 0
-    },
-    ext: {
-      ack: true,
-      timesync: {
-        tc: Date.now(),
-        l: 0,
-        o: 0
+  sendClientInfo() {
+    this.log(`Відправка інформації про клієнта...`);
+  
+    // Формування повідомлення для handshake з додатковими даними
+    const handshakeMessage = {
+      id: Date.now(),
+      version: '1.0',
+      minimumVersion: '1.0',
+      channel: '/meta/handshake',
+      supportedConnectionTypes: ['websocket', 'long-polling'],
+      advice: {
+        timeout: 60000,
+        interval: 0
+      },
+      ext: {
+        ack: true,
+        timesync: {
+          tc: Date.now(),
+          l: 0,
+          o: 0
+        }
       }
+    };
+  
+    // Якщо є challenge-токен, додаємо його як додаткове поле
+    if (this.challengeToken) {
+      handshakeMessage.ext.challenge = this.challengeToken;
     }
-  };
-
-  try {
-    this.socket.send(JSON.stringify([handshakeMessage]));
-    this.log('Handshake повідомлення відправлено');
-  } catch (error) {
-    this.log(`Помилка відправки handshake: ${error.message}`);
+  
+    try {
+      this.socket.send(JSON.stringify([handshakeMessage]));
+      this.log('Handshake повідомлення відправлено');
+    } catch (error) {
+      this.log(`Помилка відправки handshake: ${error.message}`);
+    }
   }
-}
 
   // Відправка реєстраційної інформації
   registerUser () {
