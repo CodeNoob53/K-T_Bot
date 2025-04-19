@@ -44,13 +44,13 @@ const settingsContent = document.getElementById('settingsContent');
 let botRunning = false;
 let kahootBot = null;
 
-// Дані проксі-сервера (стандартні значення, які оновлюються з UI)
+// Дані проксі-сервера (ініціалізуємо порожніми значеннями)
 let proxyConfig = {
-  host: '46.232.35.98',
-  port: 63948,
+  host: '',
+  port: '',
   auth: {
-    username: 'fcB5xS6y',
-    password: 'cnzGUxp5'
+    username: '',
+    password: ''
   }
 };
 
@@ -61,31 +61,48 @@ function logMessage(message, type = 'info') {
 
 // Функція оновлення відображення даних проксі
 function updateProxyDisplay() {
-  proxyIpElement.textContent = proxyConfig.host;
-  proxyPortElement.textContent = proxyConfig.port;
-  proxyLoginElement.textContent = proxyConfig.auth.username;
-  proxyPasswordElement.textContent = '••••••••'; // Маскування паролю
+  proxyIpElement.textContent = proxyConfig.host || 'Не вказано';
+  proxyPortElement.textContent = proxyConfig.port || 'Не вказано';
+  proxyLoginElement.textContent = proxyConfig.auth.username || 'Не вказано';
+  proxyPasswordElement.textContent = proxyConfig.auth.password ? '••••••••' : 'Не вказано'; // Маскування паролю
 }
 
 // Функція розбору введеного URL проксі
 function parseProxyUrl(url) {
   try {
-    // Перевірка на формат IP:PORT
+    // Перевірка на формат IP:PORT:LOGIN:PASSWORD
     const parts = url.split(':');
-    if (parts.length === 2) {
+    if (parts.length === 4) {
+      const [host, port, username, password] = parts;
+      // Перевірка чи IP та PORT є валідними
+      if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) && /^\d+$/.test(port)) {
+        return {
+          host,
+          port: parseInt(port, 10),
+          auth: {
+            username,
+            password
+          }
+        };
+      }
+    }
+    // Перевірка на формат IP:PORT
+    else if (parts.length === 2) {
       const [host, port] = parts;
       // Перевірка чи IP та PORT є валідними
       if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) && /^\d+$/.test(port)) {
         return {
           host,
           port: parseInt(port, 10),
-          // Використовуємо існуючі дані автентифікації
-          auth: proxyConfig.auth
+          auth: {
+            username: '',
+            password: ''
+          }
         };
       }
     }
     
-    throw new Error('Невірний формат проксі. Використовуйте формат IP:PORT');
+    throw new Error('Невірний формат проксі. Використовуйте формат IP:PORT або IP:PORT:LOGIN:PASSWORD');
   } catch (error) {
     logMessage(`Помилка розбору проксі URL: ${error.message}`, 'error');
     return null;
@@ -109,7 +126,7 @@ function validateForm() {
   }
   
   if (!proxyUrl) {
-    logMessage('Помилка: Введіть адресу проксі у форматі IP:PORT', 'error');
+    logMessage('Помилка: Введіть адресу проксі у форматі IP:PORT або IP:PORT:LOGIN:PASSWORD', 'error');
     return false;
   }
   
@@ -226,7 +243,7 @@ async function checkProxy() {
       
       // Збереження налаштувань проксі у localStorage
       utils.saveToStorage('kahootBot.proxy', {
-        url: `${proxyConfig.host}:${proxyConfig.port}`
+        url: `${proxyConfig.host}:${proxyConfig.port}:${proxyConfig.auth.username}:${proxyConfig.auth.password}`
       });
     } else {
       updateProxyStatus('error', 'Помилка: Проксі-сервер недоступний');
@@ -332,7 +349,7 @@ startBotBtn.addEventListener('click', async function() {
         useTensorflow: botOptions.useTensorflow,
         useML5: botOptions.useML5,
         useSearch: botOptions.useSearch,
-        proxy: `${proxyConfig.host}:${proxyConfig.port}`
+        proxy: `${proxyConfig.host}:${proxyConfig.port}:${proxyConfig.auth.username}:${proxyConfig.auth.password}`
       });
     } else {
       startBotBtn.disabled = false;
@@ -396,7 +413,7 @@ proxyUrlInput.addEventListener('change', function() {
       
       // Збереження налаштувань проксі у localStorage
       utils.saveToStorage('kahootBot.proxy', {
-        url: `${proxyConfig.host}:${proxyConfig.port}`
+        url: `${proxyConfig.host}:${proxyConfig.port}:${proxyConfig.auth.username}:${proxyConfig.auth.password}`
       });
     }
   }
