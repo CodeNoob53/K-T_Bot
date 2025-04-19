@@ -10,7 +10,7 @@ class KahootBot {
     
     // Налаштування сервера проксі
     // За замовчуванням використовуємо Render.com URL
-    this.proxyServerUrl = options.proxyServerUrl || 'https://your-render-app-name.onrender.com';
+    this.proxyServerUrl = options.proxyServerUrl || 'https://kahootbot-serve.onrender.com';
     
     this.options = {
       useTensorflow: options.useTensorflow || false,
